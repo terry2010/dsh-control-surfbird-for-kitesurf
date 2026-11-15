@@ -6,7 +6,7 @@
  *    + advanced 折叠组；写 handle.set/mutate → host Config volatile 热生效。
  * 2. 设置页内状态横幅 + "测试连接"（GET /plugins/control-surfbird/status?probe=1）。
  * 3. shell.overlay 启动 toast：未配置/不可达时强提示 + 一键跳设置页
- *    （pluginNavigation.openBundle('control-surfbird')，每会话一次）。
+ *    （pluginNavigation.openBundle 包名，每会话一次）。
  * 4. tool.call.toolview 键控行：surfbird_* 工具失败且属连接类错误时，
  *    行内给"打开设置"按钮。
  *
@@ -16,10 +16,12 @@
  * API 细节以真机验证为准，全部做了防御性降级。
  */
 window.__ModuleLoader__.load({
-  id: 'control-surfbird',
+  // 模块 id = 包名（dsh-client-modules 按包名注册 factory；用 cordis entry id
+  // 'control-surfbird' 会与宿主插件注册冲突 → duplicate factory registration）
+  id: 'dsh-control-surfbird-for-kitesurf',
   factory: (require) => {
-    const ID = 'control-surfbird'
-    const NS = 'control-surfbird'
+    const ID = 'dsh-control-surfbird-for-kitesurf'   // 包名：slot key / locale / 模块 id
+    const NS = 'control-surfbird'                    // configForms 命名空间 = cordis.patch.yml entry id
     const STATUS_URL = '/plugins/control-surfbird/status'
     const TOOL_NAMES = [
       'surfbird_status', 'surfbird_tabs', 'surfbird_new_tab', 'surfbird_close_tab',
@@ -100,22 +102,31 @@ window.__ModuleLoader__.load({
       }
     }
 
-    /** 从工具结果值里抠错误码（envelope {ok:false,error:{code}} 或嵌套 result）。 */
+    /** 从工具结果值里抠错误码（envelope {ok:false,error:{code}}）。
+     *  block 结构不固定——全字段递归扫描（深度≤6），字符串值尝试 JSON.parse。 */
     function toolErrorCode(value) {
-      try {
-        let v = value
-        if (typeof v === 'string') v = JSON.parse(v)
-        const walk = (x, depth) => {
-          if (depth > 4 || x === null || typeof x !== 'object') return undefined
-          if (x.ok === false && x.error && typeof x.error === 'object') return x.error.code
-          for (const k of ['value', 'result', 'data', 'output']) {
-            const r = walk(x[k], depth + 1)
-            if (r) return r
+      const seen = new Set()
+      const walk = (x, depth) => {
+        if (depth > 6 || x === null || x === undefined) return undefined
+        if (typeof x === 'string') {
+          const t = x.trim()
+          if (t.startsWith('{') || t.startsWith('[')) {
+            try { return walk(JSON.parse(t), depth + 1) } catch { /* 非 JSON 文本 */ }
           }
           return undefined
         }
-        return walk(v, 0)
-      } catch { return undefined }
+        if (typeof x !== 'object' || seen.has(x)) return undefined
+        seen.add(x)
+        if (x.ok === false && x.error && typeof x.error === 'object' && typeof x.error.code === 'string') {
+          return x.error.code
+        }
+        for (const v of Object.values(x)) {
+          const r = walk(v, depth + 1)
+          if (r) return r
+        }
+        return undefined
+      }
+      return walk(value, 0)
     }
 
     function makePanel(React, handle, nav) {
@@ -222,42 +233,37 @@ window.__ModuleLoader__.load({
       }
     }
 
-    /** 启动 toast：sessionStorage 每会话一次；探测不可达才弹。 */
-    function SetupToast({ t, onDone, onOpenSettings }) {
+    /** 启动 toast：sessionStorage 每会话一次；探测不可达才弹。React 由 apply 注入。 */
+    function SetupToast(React, { t, onDone, onOpenSettings }) {
       const [show, setShow] = React.useState(false)
       React.useEffect(() => {
         try {
           if (sessionStorage.getItem('sb-setup-toast')) return
           sessionStorage.setItem('sb-setup-toast', '1')
         } catch { /* sessionStorage 不可用仍检查一次 */ }
-        fetchStatus(false).then((st) => {
+        // 必须 probe：非探测响应不含 reachable，"已配置但端点不可达"会漏提示。
+        // 服务端探活自带 3s 超时，且 sessionStorage 保证每会话至多一次。
+        fetchStatus(true).then((st) => {
           // 未配置（无 endpoint 信息）或探测不可达 → 提示；status 字段缺失时保守不弹
           if (st && (st.configured === false || st.reachable === false)) setShow(true)
         })
       }, [])
       if (!show) return null
       const P = (() => { try { return require('@deepseek-ai/dsh-client-ui-primitives') } catch { return {} } })()
-      const card = el('div', {
-        style: { display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
-          borderRadius: 10, fontSize: 13,
-          background: 'var(--dsw-alias-bg-layer-1,#fff)',
-          border: '1px solid var(--dsw-alias-border-l2,#e0e0e0)',
-          boxShadow: '0 4px 16px rgba(0,0,0,.12)' },
-      },
-        el('div', { style: { flex: 1 } },
-          el('div', { style: { fontWeight: 600 } }, t('toast.title')),
-          el('div', { style: { opacity: 0.75, marginTop: 2 } }, t('toast.body'))),
-        el('button', {
-          onClick: () => { setShow(false); onDone?.(); onOpenSettings?.() },
-          style: { padding: '5px 12px', borderRadius: 6, border: 'none', cursor: 'pointer',
-            background: 'var(--dsw-alias-button-primary-fill,#4a6cf7)', color: '#fff', fontSize: 13 },
-        }, t('toast.action')),
-        el('button', {
-          onClick: () => { setShow(false); onDone?.() },
-          style: { padding: '5px 10px', borderRadius: 6, border: 'none', cursor: 'pointer',
-            background: 'transparent', opacity: 0.6, fontSize: 13 },
-        }, t('toast.dismiss')))
-      return P.Toast ? el(P.Toast, { children: card }) : card
+      // Toast 原语签名：{text, icon?, tone?, anchor?, holdMs?, actions:[{label,onClick}], onDone}
+      // onDone 必填（自动消失回调）；actions 是行内按钮。自定义 children 会拿不到
+      // 定位/层叠上下文，且缺 onDone 会让原语内部 c.current() 崩溃。
+      if (!P.Toast) return null
+      const done = () => { setShow(false); onDone?.() }
+      return React.createElement(P.Toast, {
+        text: `${t('toast.title')} — ${t('toast.body')}`,
+        holdMs: 15000,
+        actions: [
+          { label: t('toast.action'), onClick: () => { done(); onOpenSettings?.() } },
+          { label: t('toast.dismiss'), onClick: done },
+        ],
+        onDone: done,
+      })
     }
 
     /** tool.call.toolview 行：连接类失败 → 行内"打开设置"。 */
@@ -265,23 +271,19 @@ window.__ModuleLoader__.load({
       const el = React.createElement
       return function SurfbirdToolRow(props) {
         const { toolName, block } = props ?? {}
-        // 尝试从 props 各层找结果值
-        const candidates = [props?.result, props?.value, props?.block?.result, props?.block?.value, block]
-        let code
-        for (const c of candidates) {
-          code = toolErrorCode(c)
-          if (code) break
-        }
+        // 递归扫描整个 props（含 block 结果节点）找 {ok:false,error:{code}}
+        const code = toolErrorCode(props) ?? (block !== props?.block ? toolErrorCode(block) : undefined)
         const connFail = code && CONN_CODES.has(code)
         const name = toolName ?? 'surfbird_*'
         const base = el('div', {
+          'data-surfbird-row': name,
           style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12,
             fontFamily: 'monospace', opacity: 0.85 },
         },
           el('span', null, name),
           connFail
             ? el('button', {
-                onClick: () => nav?.openBundle?.('control-surfbird'),
+                onClick: () => nav?.openBundle?.(ID),
                 style: { fontSize: 11, padding: '1px 8px', borderRadius: 8, cursor: 'pointer',
                   border: '1px solid #cf222e', color: '#cf222e', background: 'transparent' },
                 title: code,
@@ -296,10 +298,13 @@ window.__ModuleLoader__.load({
       const React = (() => { try { return require('react') } catch { return undefined } })()
       if (!React) return
 
-      // pluginNavigation（0.2.1+）；缺失时按钮退化为无操作
+      // pluginNavigation（0.2.1+）由 plugin-manager 后激活——必须 inject 延迟等，
+      // apply 时 ctx.get 多半还拿不到。缺失时按钮退化为无操作。
       let nav
-      try { nav = ctx.get?.('pluginNavigation') ?? ctx.pluginNavigation } catch { nav = undefined }
-      const openSettings = () => { try { nav?.openBundle?.('control-surfbird') } catch { /* */ } }
+      try {
+        ctx.inject(['pluginNavigation'], (c) => { nav = c.pluginNavigation ?? c.get?.('pluginNavigation') })
+      } catch { /* 服务缺失 → nav 保持 undefined */ }
+      const openSettings = () => { try { nav?.openBundle?.(ID) } catch { /* */ } }
 
       const t0 = (key) => DICT.zh[key] ?? key
 
@@ -333,31 +338,34 @@ window.__ModuleLoader__.load({
 
       // ---- 启动 toast ----
       try {
+        // 绑定组件需稳定引用——内联箭头函数会让 React 每次 render 都 remount
+        const BoundToast = (p) => SetupToast(React, p)
         ctx.inject(['slots'], (inner) => {
-          const Toast = function SetupToastSlot(props) {
-            return React.createElement(SetupToast, { ...props, t: t0, onDone: () => {}, onOpenSettings: openSettings })
-          }
           inner.effect(() => inner.slots.inject('shell.overlay', () =>
             inner.slots.register({
               name: 'shell.overlay', id: 'control-surfbird-setup', label: 'surfbird setup',
-            }, Toast)), 'control-surfbird: setup toast')
+            }, (slotProps) => React.createElement(BoundToast, { ...slotProps, t: t0, onDone: () => {}, onOpenSettings: openSettings })),
+          ), 'control-surfbird: setup toast')
         })
       } catch { /* shell.overlay 缺失 → 无 toast */ }
 
       // ---- toolview 行 ----
+      // 必须 slots.inject 等槽位就绪——直接 register 时槽位可能尚未 provide，
+      // 25 个 key 会全部静默失败（每个都在 try/catch 里）。
       try {
         ctx.inject(['slots'], (inner) => {
           const Row = makeToolRow(React, nav, t0)
-          const disposers = []
-          for (const name of TOOL_NAMES) {
-            try {
-              disposers.push(inner.slots.register({
-                name: 'tool.call.toolview', key: name,
-              }, (props) => React.createElement(Row, { ...props, toolName: name })))
-            } catch { /* 单个注册失败不影响其余 */ }
-          }
-          inner.effect(() => () => { for (const d of disposers) { try { d() } catch { /* */ } } },
-            'control-surfbird: toolview rows')
+          inner.effect(() => inner.slots.inject('tool.call.toolview', () => {
+            const disposers = []
+            for (const name of TOOL_NAMES) {
+              try {
+                disposers.push(inner.slots.register({
+                  name: 'tool.call.toolview', key: name,
+                }, (props) => React.createElement(Row, { ...props, toolName: name })))
+              } catch { /* 单个注册失败不影响其余 */ }
+            }
+            return () => { for (const d of disposers) { try { d() } catch { /* */ } } }
+          }), 'control-surfbird: toolview rows')
         })
       } catch { /* toolview 槽位缺失 → 通用行 */ }
     }
