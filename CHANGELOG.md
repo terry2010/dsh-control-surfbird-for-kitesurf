@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-15
+
 ### Added
 
 - `surfbird_webmcp` — WebMCP support: lists and invokes tools the page
@@ -14,14 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Per-session `WebMCP.enable` with toolsAdded/toolsRemoved tracking;
   invoke waits on the async `toolResponded` event (60s default timeout).
 - `surfbird_links` — extract all page links as `{url,text}` pairs
-  (absolute URLs, URL-deduplicated, selector-scoped, capped).
+  (absolute URLs, selector-scoped, capped) with `dedupe=url|base`
+  (`base` strips `#fragment` before deduplicating).
 - `surfbird_screenshot` gains `target` (ref/selector) + `padding` —
   clip the capture to a single element's document-space bounding box.
 - `surfbird_status` now returns `capabilities` — a machine-readable
   engine feature matrix (webmcp/pdf/clip/waits/unsupported list).
+- README split into English `README.md` + `README.zh-CN.md`, with
+  copy-paste test prompts covering all 28 tools on zhuikan.com.
 
 ### Fixed
 
+- `surfbird_evaluate`/`find`/`links` page-side errors now return only
+  the first line (≤500 chars) — engine wasm stack traces no longer
+  flood the result.
 - Tool-row "Open settings" button now only appears for genuine
   connection/config failures (`not_configured`, new `unreachable`
   code for endpoint connect failures) — previously any `timeout`,
@@ -29,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   e.g. a routine `surfbird_wait` timeout.
 - Transport-level `BrowserResetError`s now surface as
   `browser_reset` (retryable) instead of generic `cdp_error`.
+- `surfbird_navigate` description + skill now warn that navigating
+  to "check the URL" reloads the page — point readers at
+  `surfbird_evaluate`/`snapshot` instead.
 
 ## [0.3.0] - 2026-11-15
 
