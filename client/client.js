@@ -306,7 +306,14 @@ window.__ModuleLoader__.load({
       } catch { /* 服务缺失 → nav 保持 undefined */ }
       const openSettings = () => { try { nav?.openBundle?.(ID) } catch { /* */ } }
 
-      const t0 = (key) => DICT.zh[key] ?? key
+      // 优先宿主 locale（zh/en 字典已注册）；bind 不可用时回退固定中文
+      const t0 = (() => {
+        try {
+          const t = ctx.locale?.bind?.(ID)
+          if (typeof t === 'function') return t
+        } catch { /* */ }
+        return (key) => DICT.zh[key] ?? key
+      })()
 
       // ---- 配置卡 ----
       try {
