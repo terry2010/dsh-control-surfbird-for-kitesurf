@@ -4,8 +4,9 @@
 
 ## Key facts
 
-- Package: `dsh-control-surfbird-for-kitesurf` on npm (Apache-2.0, Node >= 22.18, ESM)
-- Tool prefix: `surfbird_*` (26 typed tools + status/capabilities reporting)
+- Package: `dsh-control-surfbird-for-kitesurf` on npm — https://www.npmjs.com/package/dsh-control-surfbird-for-kitesurf (Apache-2.0, Node >= 22.18, ESM)
+- Repo: https://github.com/terry2010/dsh-control-surfbird-for-kitesurf
+- Tools: 28 `surfbird_*` tools (tabs, navigate, snapshot/ax, click/fill/type, wait, evaluate, find/extract/links, screenshot/pdf, console/network, webmcp, cdp passthrough, status)
 - Install: `dsh plugin --profile <name> add dsh-control-surfbird-for-kitesurf`
 - Requires a Kitesurf-compatible CDP endpoint (surfbird container `auth` mode recommended, or upstream Kitesurf)
 - Engine limits: no JS dialogs, file upload/download, clipboard, drag/touch, complete keyboard events
