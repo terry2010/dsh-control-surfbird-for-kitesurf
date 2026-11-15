@@ -41,7 +41,7 @@
     "cdp",
     "automation"
   ],
-  "license": "MIT",
+  "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/terry2010/dsh-control-surfbird-for-kitesurf.git"
