@@ -20,11 +20,11 @@ import type { AttachmentStore, ImageAttachmentRef } from '@deepseek-ai/dsh-attac
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import {
   defineTool,
-  type JsonValue,
   type ParameterPropertySpec,
   type ParameterSchemaSpec,
   type ToolRunContext,
 } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { SessionRegistry, type SessionBrowser } from './cdp/session.ts'
 import { SurfbirdError, type JsonObject } from './cdp/types.ts'
 import { snapshot } from './cdp/snapshot.ts'
@@ -113,7 +113,10 @@ function renderResult(_args: unknown, value: JsonValue): ContentBlock[] {
 }
 
 function sessionKey(exec: ToolRunContext): string {
-  return exec.agent?.session?.id ?? '__global__'
+  // dsh-agent ≥0.2 精简了 Agent 接口（id 即 SessionId）；旧版走 session.id——双兼容
+  const a = exec.agent as { id?: unknown; session?: { id?: unknown } } | undefined
+  const id = a?.session?.id ?? a?.id
+  return typeof id === 'string' && id ? id : '__global__'
 }
 
 function numArg(v: JsonValue | undefined): number | undefined {

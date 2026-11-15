@@ -84,6 +84,15 @@ function firstEnv(names: readonly string[]): string | undefined {
   return undefined
 }
 
+/** cordis volatile 字段解析后是 {get} 描述符（宿主原地热更）；裸值原样返回。 */
+function volatileValue(v: unknown): unknown {
+  if (v !== null && typeof v === 'object' && typeof (v as { get?: unknown }).get === 'function'
+    && Object.keys(v).every((k) => k === 'get')) {
+    return (v as { get: () => unknown }).get()
+  }
+  return v
+}
+
 function readTokenFile(path: string | undefined): string | undefined {
   if (!path) return undefined
   try {
@@ -94,31 +103,34 @@ function readTokenFile(path: string | undefined): string | undefined {
   }
 }
 
-/** 解析生效配置：config（settings scope 或 apply 入参）> env > 默认。 */
+/** 解析生效配置：config（settings scope 或 apply 入参，volatile 字段就地热更）> env > 默认。 */
 export function resolveConfig(config: Record<string, unknown>): ResolvedConfig {
-  const cfgEndpoint = typeof config.endpoint === 'string' && config.endpoint.trim() ? config.endpoint.trim() : undefined
+  // 每个字段读取都过 volatileValue——resolved() 每次调用重解，配置页改值即时生效
+  const raw = (k: string): unknown => volatileValue(config[k])
+  const cfgEndpoint = typeof raw('endpoint') === 'string' && (raw('endpoint') as string).trim() ? (raw('endpoint') as string).trim() : undefined
   const envEndpoint = firstEnv(ENDPOINT_ENVS)
   // config.endpoint 有 schemastery 默认值——等于默认值时让 env 优先
   const endpoint = cfgEndpoint && cfgEndpoint !== DEFAULT_ENDPOINT ? cfgEndpoint : (envEndpoint ?? cfgEndpoint ?? DEFAULT_ENDPOINT)
   const endpointSource = cfgEndpoint && cfgEndpoint !== DEFAULT_ENDPOINT ? 'config' : envEndpoint ? 'env' : 'default'
 
-  const tokenFile = typeof config.tokenFile === 'string' && config.tokenFile.trim() ? config.tokenFile.trim() : undefined
-  const cfgToken = typeof config.token === 'string' && config.token.trim() ? config.token.trim() : undefined
+  const tokenFile = typeof raw('tokenFile') === 'string' && (raw('tokenFile') as string).trim() ? (raw('tokenFile') as string).trim() : undefined
+  const cfgToken = typeof raw('token') === 'string' && (raw('token') as string).trim() ? (raw('token') as string).trim() : undefined
   const envToken = firstEnv(TOKEN_ENVS)
   const fileToken = readTokenFile(tokenFile)
   const token = fileToken ?? cfgToken ?? envToken ?? ''
   const tokenSource = fileToken ? 'tokenFile' : cfgToken ? 'config' : envToken ? 'env' : 'none'
+  const num = (k: string, d: number): number => typeof raw(k) === 'number' ? (raw(k) as number) : d
 
   return {
     endpoint,
     token,
     tokenFile,
-    requestTimeoutMs: typeof config.requestTimeoutMs === 'number' ? config.requestTimeoutMs : 120000,
-    keepaliveMs: typeof config.keepaliveMs === 'number' ? config.keepaliveMs : 300000,
-    maxSessions: typeof config.maxSessions === 'number' ? config.maxSessions : 8,
-    idleEvictMs: typeof config.idleEvictMs === 'number' ? config.idleEvictMs : 300000,
-    screenshotDir: typeof config.screenshotDir === 'string' && config.screenshotDir.trim() ? config.screenshotDir.trim() : undefined,
-    debugLog: config.debugLog === true,
+    requestTimeoutMs: num('requestTimeoutMs', 120000),
+    keepaliveMs: num('keepaliveMs', 300000),
+    maxSessions: num('maxSessions', 8),
+    idleEvictMs: num('idleEvictMs', 300000),
+    screenshotDir: typeof raw('screenshotDir') === 'string' && (raw('screenshotDir') as string).trim() ? (raw('screenshotDir') as string).trim() : undefined,
+    debugLog: raw('debugLog') === true,
     configSource: `${endpointSource}+${tokenSource}`,
   }
 }
@@ -178,8 +190,8 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
   registerSurfbirdSkill(ctx)
 
   // agent 销毁 → 断开该 session 的浏览器（引擎侧 tab 全灭）
-  const offDisposed = ctx.on('agent/disposed', ({ agent }: { agent?: { session?: { id?: unknown } } }) => {
-    const id = agent?.session?.id
+  const offDisposed = ctx.on('agent/disposed', ({ agent }: { agent?: { id?: unknown; session?: { id?: unknown } } }) => {
+    const id = agent?.session?.id ?? agent?.id
     if (typeof id === 'string' && id) void registry.release(id).catch(() => undefined)
   })
 
