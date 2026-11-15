@@ -20,15 +20,19 @@ export const inject: string[] = []
 
 export const Config = z.object({
   endpoint: z.string().default('http://127.0.0.1:8080').volatile()
-    .description('Kitesurf CDP 端点：http(s) base（自动转 ws://…/devtools/browser）或完整 ws(s):// URL'),
+    .description('Kitesurf CDP 端点：http(s) base（自动转 ws://…/devtools/browser）或完整 ws(s):// URL；env 兜底 KITESURF_ENDPOINT→KITESURF_URL→SURFBIRD_URL'),
   token: z.string().volatile()
-    .description('Bearer token（surfbird auth 镜像需要）；缺省读 KITESURF_TOKEN / SURFBIRD_TOKEN 环境变量，空=无认证'),
+    .description('Bearer token（surfbird auth 镜像需要）；env 兜底 KITESURF_TOKEN→SURFBIRD_TOKEN，空=无认证'),
   requestTimeoutMs: z.natural().min(1000).default(120000).volatile()
     .description('单条 CDP 调用超时（毫秒）'),
   keepaliveMs: z.natural().min(30000).default(300000).volatile()
     .description('WS 心跳间隔（毫秒）；引擎 idle 上限 10 分钟，必须小于它'),
   maxSessions: z.natural().min(1).default(8).volatile()
-    .description('并发 agent session 上限；超出时断开最久未用的连接'),
+    .description('并发 agent session 上限；超限只驱逐 idle session，否则报 too_many_sessions'),
+  idleEvictMs: z.natural().min(60000).default(300000).volatile()
+    .description('session 闲置超过此时长（毫秒）才允许被 maxSessions 驱逐'),
+  screenshotDir: z.string().volatile()
+    .description('可选：截图同时落盘到该目录'),
   debugLog: z.boolean().default(false).volatile()
     .description('写诊断日志到 ~/.dsh/kitesurf-debug.log；默认关'),
 })
