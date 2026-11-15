@@ -5,7 +5,7 @@
 
 **English** | [中文](#中文)
 
-A [DSH](https://www.deepseek.com/) (DeepSeek Harness) plugin that gives an AI agent full control of a [Kitesurf](https://github.com/cloudflare/kitesurf) browser engine over the Chrome DevTools Protocol (CDP) — like a human operating a browser. Works with the self-hosted [surfbird](https://github.com/terry2010/surfbird) distribution (raw or token-auth mode) and upstream Kitesurf deployments. Exposes **25 `surfbird_*` tools**: tab management, navigation, semantic accessibility snapshots, click/type/fill, waits, JavaScript evaluation, screenshots, PDF export, and console/network inspection — with one isolated browser per agent session.
+A [DSH](https://www.deepseek.com/) (DeepSeek Harness) plugin that gives an AI agent full control of a [Kitesurf](https://github.com/cloudflare/kitesurf) browser engine over the Chrome DevTools Protocol (CDP) — like a human operating a browser. Works with the self-hosted [surfbird](https://github.com/terry2010/surfbird) distribution (raw or token-auth mode) and upstream Kitesurf deployments. Exposes **26 `surfbird_*` tools**: tab management, navigation, semantic accessibility snapshots, click/type/fill, waits, JavaScript evaluation, screenshots, PDF export, and console/network inspection — with one isolated browser per agent session.
 
 ## Features
 
@@ -70,13 +70,13 @@ The ciphertext contains no machine id — it can be committed, synced or backed 
 
 ## Usage
 
-The model sees all 25 tools once the plugin loads; `skills/surfbird-control/SKILL.md` is registered as a usage manual so agents know the workflow without prompting.
+The model sees all 26 tools once the plugin loads; `skills/surfbird-control/SKILL.md` is registered as a usage manual so agents know the workflow without prompting.
 
 | Group | Tools |
 |---|---|
 | Session & browser | `surfbird_status` `surfbird_tabs` `surfbird_new_tab` `surfbird_select_tab` `surfbird_close_tab` `surfbird_cdp` |
 | Navigation | `surfbird_navigate` `surfbird_back` `surfbird_forward` `surfbird_reload` |
-| Content | `surfbird_snapshot` `surfbird_ax` `surfbird_extract` |
+| Content | `surfbird_snapshot` `surfbird_ax` `surfbird_extract` `surfbird_find` |
 | Interaction | `surfbird_click` `surfbird_double_click` `surfbird_fill` `surfbird_type` `surfbird_press_key` `surfbird_scroll` |
 | Wait & eval | `surfbird_wait` `surfbird_evaluate` |
 | Output | `surfbird_screenshot` `surfbird_pdf` |
@@ -148,7 +148,7 @@ Anything the engine can't: JS dialogs, file upload/download, clipboard, drag/tou
 
 **[English](#dsh-control-surfbird-for-kitesurf) | 中文**
 
-DSH（DeepSeek Harness）插件：让 AI agent 通过 Chrome DevTools Protocol（CDP）像人一样操控 [Kitesurf](https://github.com/cloudflare/kitesurf) 浏览器引擎。兼容自托管 [surfbird](https://github.com/terry2010/surfbird) 发行版（raw / token-auth 模式）和上游 Kitesurf 部署。提供 **25 个 `surfbird_*` 工具**：标签页管理、导航、语义化无障碍快照、点击/输入/填充、等待、JS 执行、截图、PDF 导出、console/network 检查——每个 agent 会话独享一个隔离浏览器。
+DSH（DeepSeek Harness）插件：让 AI agent 通过 Chrome DevTools Protocol（CDP）像人一样操控 [Kitesurf](https://github.com/cloudflare/kitesurf) 浏览器引擎。兼容自托管 [surfbird](https://github.com/terry2010/surfbird) 发行版（raw / token-auth 模式）和上游 Kitesurf 部署。提供 **26 个 `surfbird_*` 工具**：标签页管理、导航、语义化无障碍快照、点击/输入/填充、等待、JS 执行、截图、PDF 导出、console/network 检查——每个 agent 会话独享一个隔离浏览器。
 
 ## 特性
 
@@ -213,13 +213,13 @@ surfbird-token id                          # 查看本机标识
 
 ## 使用方式
 
-插件加载后模型即可见全部 25 个工具；`skills/surfbird-control/SKILL.md` 作为使用手册注册，无需提示词引导。
+插件加载后模型即可见全部 26 个工具；`skills/surfbird-control/SKILL.md` 作为使用手册注册，无需提示词引导。
 
 | 分组 | 工具 |
 |---|---|
 | 会话与浏览器 | `surfbird_status` `surfbird_tabs` `surfbird_new_tab` `surfbird_select_tab` `surfbird_close_tab` `surfbird_cdp` |
 | 导航 | `surfbird_navigate` `surfbird_back` `surfbird_forward` `surfbird_reload` |
-| 内容 | `surfbird_snapshot` `surfbird_ax` `surfbird_extract` |
+| 内容 | `surfbird_snapshot` `surfbird_ax` `surfbird_extract` `surfbird_find` |
 | 交互 | `surfbird_click` `surfbird_double_click` `surfbird_fill` `surfbird_type` `surfbird_press_key` `surfbird_scroll` |
 | 等待与执行 | `surfbird_wait` `surfbird_evaluate` |
 | 输出 | `surfbird_screenshot` `surfbird_pdf` |

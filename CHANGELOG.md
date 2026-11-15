@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `surfbird_find` — in-page text search with Ctrl+F semantics: counts
+  matches across visible text (skips script/style/hidden subtrees),
+  scrolls each match into view via Range geometry, returns a ±80-char
+  context snippet, and supports `first`/`next`/`prev`/`count`/`clear`
+  actions plus `caseSensitive`/`wholeWord` flags. No visual highlight —
+  pair with `surfbird_screenshot` or `surfbird_extract`. Match state is
+  kept per document in the page and resets on navigation.
+- New `bad_args` tool error code for invalid tool arguments.
+
 ## [0.1.1] - 2026-11-15
 
 ### Fixed

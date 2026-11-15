@@ -30,8 +30,8 @@ window.__ModuleLoader__.load({
       'surfbird_reload', 'surfbird_wait', 'surfbird_snapshot', 'surfbird_ax',
       'surfbird_click', 'surfbird_double_click', 'surfbird_fill', 'surfbird_type',
       'surfbird_press_key', 'surfbird_scroll', 'surfbird_screenshot', 'surfbird_pdf',
-      'surfbird_evaluate', 'surfbird_extract', 'surfbird_console', 'surfbird_network',
-      'surfbird_cdp',
+      'surfbird_evaluate', 'surfbird_extract', 'surfbird_find', 'surfbird_console',
+      'surfbird_network', 'surfbird_cdp',
     ]
     // 连接类错误 → 行内给设置入口
     const CONN_CODES = new Set(['cdp_error', 'browser_reset', 'timeout', 'not_configured', 'no_tab'])

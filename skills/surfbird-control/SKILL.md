@@ -15,7 +15,7 @@ You control a real Kitesurf browser engine through `surfbird_*` tools. Each agen
 
 ## Core workflow: observe → act → verify
 
-- **Observe**: `surfbird_snapshot` returns a semantic digest — `[eN] role "name" → href` for interactive elements, `[hN]` headings, `[tN]` text. Use `surfbird_ax` for the accessibility tree when semantics matter. Use `surfbird_extract` for article→Markdown on content pages.
+- **Observe**: `surfbird_snapshot` returns a semantic digest — `[eN] role "name" → href` for interactive elements, `[hN]` headings, `[tN]` text. Use `surfbird_ax` for the accessibility tree when semantics matter. Use `surfbird_extract` for article→Markdown on content pages. Use `surfbird_find` to locate text on the page (Ctrl+F semantics: counts matches, scrolls to each, returns context snippet — no visual highlight).
 - **Act**: click/fill/type/press_key/scroll/navigate using `eN` refs or CSS selectors.
 - **Verify**: after every mutating action, confirm the effect — `surfbird_wait` for conditions, `surfbird_snapshot` for state, `surfbird_console`/`surfbird_network` for diagnostics.
 
@@ -24,6 +24,10 @@ You control a real Kitesurf browser engine through `surfbird_*` tools. Each agen
 - `eN` refs come from `surfbird_snapshot` and are **tab-scoped and generation-scoped**. Any navigation, reload, or `setDocumentContent` invalidates them (`doc_changed`). Always re-snapshot before reusing a ref after page changes.
 - `truncated`/`omitted` in snapshot output means you hit the budget — narrow with `selector` or raise `maxChars`/`maxNodes`.
 - `surfbird_wait` accepts `target: {ref}` or `{selector}` for visible/hidden/enabled checks.
+
+## Finding text
+
+`surfbird_find text=…` scans visible text (skips script/style/hidden subtrees), scrolls the match into view and returns `{count, index, snippet}` — the snippet is ±80 chars of context. `action=next|prev` walks matches; state persists per document and resets on navigation. `action=count` returns only the total; `clear` resets. `caseSensitive`/`wholeWord` flags supported. There is **no visual highlight** — follow up with `surfbird_screenshot` to see the scrolled position or `surfbird_extract`/`evaluate` for surrounding content.
 
 ## Waiting
 
@@ -53,7 +57,7 @@ You control a real Kitesurf browser engine through `surfbird_*` tools. Each agen
 
 ## Error codes
 
-`browser_reset` (connection dropped — all tabs gone, retry), `no_tab`/`bad_tab_id`/`not_attached` (tab problems — `surfbird_tabs`), `ref_stale`/`doc_changed` (re-snapshot), `no_article` (use snapshot instead), `timeout` (raise timeoutMs or check state), `element_not_visible` (scroll into view or pick another target), `too_many_sessions` (too many concurrent agent sessions), `cdp_error` (engine/protocol error — message has details), `not_configured` (endpoint/token missing — direct user to plugin settings).
+`browser_reset` (connection dropped — all tabs gone, retry), `no_tab`/`bad_tab_id`/`not_attached` (tab problems — `surfbird_tabs`), `ref_stale`/`doc_changed` (re-snapshot), `no_article` (use snapshot instead), `bad_args` (invalid tool argument), `timeout` (raise timeoutMs or check state), `element_not_visible` (scroll into view or pick another target), `too_many_sessions` (too many concurrent agent sessions), `cdp_error` (engine/protocol error — message has details), `not_configured` (endpoint/token missing — direct user to plugin settings).
 
 ## Session lifetime
 

@@ -49,6 +49,7 @@ export type SurfbirdErrorCode =
   | 'too_many_sessions'
   | 'element_not_visible'
   | 'not_configured'
+  | 'bad_args'
 
 /** 结构化错误：code + retryable 供工具层直接映射。 */
 export class SurfbirdError extends Error {

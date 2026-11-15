@@ -1,5 +1,5 @@
 /**
- * src/tools.ts — 25 个 surfbird_* 工具的 DSH 薄壳。
+ * src/tools.ts — 26 个 surfbird_* 工具的 DSH 薄壳。
  *
  * 约定：
  * - execute 返回 JsonValue；文本型工具返回 {ok:true,text,...meta}，
@@ -32,6 +32,7 @@ import { axTree } from './cdp/ax.ts'
 import { waitFor, type WaitState } from './cdp/wait.ts'
 import * as input from './cdp/input.ts'
 import { extract } from './cdp/extract.ts'
+import { buildFindExpression } from './find.ts'
 
 const S = (description: string): ParameterPropertySpec => ({ type: 'string', description })
 const SN = (description: string): ParameterPropertySpec => ({ type: 'number', description })
@@ -498,6 +499,31 @@ const TOOLS: ToolDef[] = [
       const { content, markdown, ...meta } = res
       void markdown
       return ok({ text: res.markdown, ...meta, contentChars: content.length })
+    },
+  },
+  {
+    name: 'surfbird_find',
+    description: 'Find text in the page like Ctrl+F. Counts matches, scrolls the current one into view and returns a context snippet — no visual highlight. action=first|next|prev walks matches (state persists per document), count returns the total only, clear resets. Combine with surfbird_screenshot or surfbird_extract for content.',
+    parameters: {
+      text: REQ_S('Text to find.'),
+      action: { type: 'string', enum: ['first', 'next', 'prev', 'count', 'clear'], description: "Default 'first'." },
+      caseSensitive: SB('Case-sensitive matching (default false).'),
+      wholeWord: SB('Match whole words only (default false).'),
+      tabId: TAB_ID,
+    },
+    run: async (sess, args, exec) => {
+      const r = await sess.resolveTab(strArg(args.tabId))
+      const action = strArg(args.action) ?? 'first'
+      if (!['first', 'next', 'prev', 'count', 'clear'].includes(action)) {
+        throw new SurfbirdError('bad_args', `invalid action: ${action}`)
+      }
+      const value = await sess.evaluate(r, buildFindExpression({
+        text: String(args.text ?? ''),
+        action: action as 'first' | 'next' | 'prev' | 'count' | 'clear',
+        caseSensitive: boolArg(args.caseSensitive),
+        wholeWord: boolArg(args.wholeWord),
+      }), { returnByValue: true, signal: exec.signal })
+      return ok(value as JsonValue)
     },
   },
   {
