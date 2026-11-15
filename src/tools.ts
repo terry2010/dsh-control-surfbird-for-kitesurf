@@ -63,7 +63,7 @@ export interface ToolsDeps {
   attachments?: AttachmentStore
   outputDir?: string
   /** 配置诊断（status 用；不回显 token）。 */
-  configInfo?: () => { configSource: string; endpoint: string; tokenSet: boolean }
+  configInfo?: () => { configSource: string; endpoint: string; tokenSet: boolean; tokenFileError?: string; tokenFileEncrypted?: boolean }
   /** 状态上报回调（client toast 用）。 */
   onSessionError?: (key: string, err: unknown) => void
 }
@@ -175,6 +175,8 @@ const TOOLS: ToolDef[] = [
         configSource: cfg?.configSource,
         endpoint: cfg?.endpoint,
         tokenSet: cfg?.tokenSet,
+        tokenFileEncrypted: cfg?.tokenFileEncrypted,
+        tokenFileError: cfg?.tokenFileError,
         configured: cfg ? !!cfg.endpoint : undefined,
         product: strOrUndef(ver.product),
         protocolVersion: strOrUndef(ver['protocol-version'] ?? ver.protocolVersion),

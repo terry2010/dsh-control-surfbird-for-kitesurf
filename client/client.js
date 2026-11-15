@@ -39,6 +39,9 @@ window.__ModuleLoader__.load({
       zh: {
         'group.main': '连接', 'group.advanced': '高级',
         'f.endpoint': 'CDP 端点', 'f.token': '密钥', 'f.tokenFile': '密钥文件',
+        'hint.tokenFile': '明文或 surfbird-v1: 机器绑定密文（surfbird-token encrypt 生成）',
+        'err.unreadable': '密钥文件读取失败', 'err.empty': '密钥文件为空',
+        'err.no_machine_id': '无法识别本机标识', 'err.decrypt_failed': '密钥文件解密失败（可能是别的机器生成的）',
         'f.requestTimeoutMs': '请求超时 (ms)', 'f.keepaliveMs': '心跳间隔 (ms)',
         'f.maxSessions': '最大会话数', 'f.idleEvictMs': '空闲回收 (ms)',
         'f.screenshotDir': '截图/PDF 目录', 'f.debugLog': '诊断日志',
@@ -53,6 +56,9 @@ window.__ModuleLoader__.load({
       en: {
         'group.main': 'Connection', 'group.advanced': 'Advanced',
         'f.endpoint': 'CDP endpoint', 'f.token': 'Token', 'f.tokenFile': 'Token file',
+        'hint.tokenFile': 'Plaintext or surfbird-v1: machine-bound ciphertext (surfbird-token encrypt)',
+        'err.unreadable': 'token file unreadable', 'err.empty': 'token file is empty',
+        'err.no_machine_id': 'machine id not detectable', 'err.decrypt_failed': 'token file decrypt failed (possibly created on another machine)',
         'f.requestTimeoutMs': 'Request timeout (ms)', 'f.keepaliveMs': 'Keepalive (ms)',
         'f.maxSessions': 'Max sessions', 'f.idleEvictMs': 'Idle eviction (ms)',
         'f.screenshotDir': 'Screenshot/PDF dir', 'f.debugLog': 'Debug log',
@@ -69,7 +75,7 @@ window.__ModuleLoader__.load({
     const FIELDS = [
       { group: 'main', key: 'endpoint', type: 'text', label: 'endpoint', placeholder: 'http://127.0.0.1:8080' },
       { group: 'main', key: 'token', type: 'text', label: 'token', secret: true },
-      { group: 'main', key: 'tokenFile', type: 'text', label: 'tokenFile', placeholder: '/path/to/token' },
+      { group: 'main', key: 'tokenFile', type: 'text', label: 'tokenFile', placeholder: '/path/to/token', hint: true },
       { group: 'advanced', key: 'requestTimeoutMs', type: 'num', min: 1000 },
       { group: 'advanced', key: 'keepaliveMs', type: 'num', min: 30000 },
       { group: 'advanced', key: 'maxSessions', type: 'num', min: 1 },
@@ -133,9 +139,10 @@ window.__ModuleLoader__.load({
       const el = React.createElement
       const P = (() => { try { return require('@deepseek-ai/dsh-client-ui-primitives') } catch { return {} } })()
 
-      const row = (label, control) => el('div', {
-        style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 0', fontSize: 13, gap: 8 },
-      }, el('span', { style: { flexShrink: 0 } }, label), control)
+      const row = (label, control, hint) => el('div', { style: { padding: '4px 0' } },
+        el('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, gap: 8 } },
+          el('span', { style: { flexShrink: 0 } }, label), control),
+        hint ? el('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-secondary,#888)', paddingTop: 2 } }, hint) : null)
 
       const inputStyle = P.Input
         ? { width: 220, fontSize: 13 }
@@ -185,6 +192,8 @@ window.__ModuleLoader__.load({
         },
           el('span', { style: { width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block' } }),
           el('span', null, st === null ? t('status.unknown') : ok ? `${t('status.ok')}${st.product ? ` · ${st.product}` : ''}` : t('status.bad')),
+          st?.tokenFileError ? el('span', { style: { color: '#cf222e', fontSize: 11 } },
+            t(`err.${st.tokenFileError}`) === `err.${st.tokenFileError}` ? st.tokenFileError : t(`err.${st.tokenFileError}`)) : null,
           el('button', {
             onClick: test, disabled: busy,
             style: { marginLeft: 'auto', fontSize: 12, padding: '2px 10px', borderRadius: 6,
@@ -217,7 +226,7 @@ window.__ModuleLoader__.load({
         for (const g of ['main', 'advanced']) {
           const items = groups[g] ?? []
           if (!items.length) continue
-          const fields = items.map((f) => row(t(`f.${f.key}`), control(f, data[f.key], write)))
+          const fields = items.map((f) => row(t(`f.${f.key}`), control(f, data[f.key], write), f.hint ? t(`hint.${f.key}`) : undefined))
           children.push(g === 'advanced'
             ? el('details', { key: g, style: { marginBottom: 12 } },
                 el('summary', { style: { cursor: 'pointer', fontWeight: 600, padding: '6px 0',

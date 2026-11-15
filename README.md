@@ -34,11 +34,30 @@ After install, open the plugin's settings page (or wait for the setup toast) and
 |---|---|
 | `endpoint` | CDP endpoint, e.g. `http://127.0.0.1:8080` or `http://123.123.123.123:8787`. `http(s)://` is normalized to the browser WS automatically. |
 | `token` | Bearer token (surfbird auth mode). Prefer `tokenFile` to keep secrets out of config. |
-| `tokenFile` | Path to a file containing the token (takes precedence over `token`). |
+| `tokenFile` | Path to a file containing the token — plaintext or `surfbird-v1:` machine-bound ciphertext (takes precedence over `token`). |
 
 Optional: `requestTimeoutMs`, `keepaliveMs`, `maxSessions`, `idleEvictMs`, `screenshotDir`, `debugLog`.
 
 Values are hot-reloaded — no restart needed after editing.
+
+### Encrypted token file (machine-bound)
+
+`tokenFile` accepts two formats, auto-detected by content:
+
+- **Plaintext** — the file contains the raw Bearer token (chmod 600 recommended).
+- **`surfbird-v1:` ciphertext** — AES-256-GCM encrypted; the key is derived from this machine's UUID (`IOPlatformUUID` / `MachineGuid` / `machine-id`), so the file is useless on any other computer. Generate it with the bundled CLI:
+
+```bash
+echo -n 'your-token' | npx surfbird-token encrypt -o ~/.surfbird-token   # or: surfbird-token encrypt > file
+surfbird-token decrypt ~/.surfbird-token    # verify / recover the token
+surfbird-token id                           # show detected machine id (debug)
+```
+
+The ciphertext contains no machine id — it can be committed, synced, or backed up safely; it simply won't decrypt elsewhere. Caveats:
+
+- **OS reinstall may change the UUID** (Windows `MachineGuid`, Linux `machine-id`; macOS `IOPlatformUUID` survives reinstall) — after that, re-run `encrypt`.
+- Machine-binding ≠ user-binding: other local user accounts and same-user processes can still derive the key. For stronger isolation keep the plaintext file with tight permissions (`chmod 600`) or fetch the token from an OS credential store / password manager.
+- Decrypt failure surfaces as `tokenFileError` in `surfbird_status` and the settings banner, and falls back to `token`/env sources.
 
 ### Environment fallback (headless / CI)
 

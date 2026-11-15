@@ -4,6 +4,9 @@
   "description": "Control a Kitesurf browser engine over CDP from DSH via surfbird. Works with surfbird raw/auth deployments and upstream kitesurf.",
   "type": "module",
   "main": "lib/index.js",
+  "bin": {
+    "surfbird-token": "./lib/tokenfile-cli.js"
+  },
   "exports": {
     ".": "./lib/index.js",
     "./client": "./client/client.js",

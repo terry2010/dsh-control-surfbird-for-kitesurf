@@ -14,7 +14,7 @@
  * @module dsh-control-surfbird-for-kitesurf
  */
 
-import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { appendFileSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -25,6 +25,7 @@ import type { SessionOptions } from './cdp/session.ts'
 import { registerSurfbirdTools } from './tools.ts'
 import { registerSurfbirdSkill } from './skill.ts'
 import { normalizeEndpoint } from './cdp/transport.ts'
+import { readTokenFile } from './tokenfile.ts'
 
 export const name = 'control-surfbird'
 
@@ -42,7 +43,7 @@ export const Config = z.object({
   token: z.string().volatile()
     .description('Bearer token（surfbird auth 镜像需要）；tokenFile 优先；env 兜底 SURFBIRD_TOKEN→KITESURF_TOKEN，空=无认证'),
   tokenFile: z.string().volatile()
-    .description('可选：token 文件路径（内容为 Bearer token）；优先于 token 字段，token 不落配置文件'),
+    .description('可选：token 文件路径；内容为 Bearer token 明文或 surfbird-v1: 机器绑定密文（surfbird-token encrypt 生成，拷到别的机器解不开）；优先于 token 字段，token 不落配置文件'),
   requestTimeoutMs: z.natural().min(1000).default(120000).volatile()
     .description('单条 CDP 调用超时（毫秒）'),
   keepaliveMs: z.natural().min(30000).default(300000).volatile()
@@ -61,6 +62,10 @@ export interface ResolvedConfig {
   endpoint: string
   token: string
   tokenFile?: string
+  /** tokenFile 读取/解密失败原因（诊断用；此时回退到 token/env 源）。 */
+  tokenFileError?: string
+  /** tokenFile 内容是 surfbird-v1: 密文。 */
+  tokenFileEncrypted?: boolean
   requestTimeoutMs: number
   keepaliveMs: number
   maxSessions: number
@@ -93,16 +98,6 @@ function volatileValue(v: unknown): unknown {
   return v
 }
 
-function readTokenFile(path: string | undefined): string | undefined {
-  if (!path) return undefined
-  try {
-    const t = readFileSync(path, 'utf8').trim()
-    return t || undefined
-  } catch {
-    return undefined
-  }
-}
-
 /** 解析生效配置：config（settings scope 或 apply 入参，volatile 字段就地热更）> env > 默认。 */
 export function resolveConfig(config: Record<string, unknown>): ResolvedConfig {
   // 每个字段读取都过 volatileValue——resolved() 每次调用重解，配置页改值即时生效
@@ -116,7 +111,8 @@ export function resolveConfig(config: Record<string, unknown>): ResolvedConfig {
   const tokenFile = typeof raw('tokenFile') === 'string' && (raw('tokenFile') as string).trim() ? (raw('tokenFile') as string).trim() : undefined
   const cfgToken = typeof raw('token') === 'string' && (raw('token') as string).trim() ? (raw('token') as string).trim() : undefined
   const envToken = firstEnv(TOKEN_ENVS)
-  const fileToken = readTokenFile(tokenFile)
+  const fileRes = readTokenFile(tokenFile)
+  const fileToken = fileRes.token
   const token = fileToken ?? cfgToken ?? envToken ?? ''
   const tokenSource = fileToken ? 'tokenFile' : cfgToken ? 'config' : envToken ? 'env' : 'none'
   const num = (k: string, d: number): number => typeof raw(k) === 'number' ? (raw(k) as number) : d
@@ -125,6 +121,8 @@ export function resolveConfig(config: Record<string, unknown>): ResolvedConfig {
     endpoint,
     token,
     tokenFile,
+    tokenFileError: fileRes.error,
+    tokenFileEncrypted: fileRes.encrypted,
     requestTimeoutMs: num('requestTimeoutMs', 120000),
     keepaliveMs: num('keepaliveMs', 300000),
     maxSessions: num('maxSessions', 8),
@@ -182,7 +180,7 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
     get outputDir() { return resolved().screenshotDir },
     configInfo: () => {
       const c = resolved()
-      return { configSource: c.configSource, endpoint: c.endpoint, tokenSet: !!c.token }
+      return { configSource: c.configSource, endpoint: c.endpoint, tokenSet: !!c.token, tokenFileError: c.tokenFileError, tokenFileEncrypted: c.tokenFileEncrypted }
     },
     onSessionError: (_key: string, err: unknown) => {
       if (resolved().debugLog) logDebug(`session error: ${err instanceof Error ? err.message : String(err)}`)
@@ -219,6 +217,8 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
             endpointSet: !!c.endpoint,
             tokenSet: !!c.token,
             tokenFileSet: !!c.tokenFile,
+            tokenFileEncrypted: c.tokenFileEncrypted === true,
+            tokenFileError: c.tokenFileError,
             configured: !!c.endpoint,
             activeSessions: registry.size(),
           }
