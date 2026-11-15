@@ -54,7 +54,7 @@ window.__ModuleLoader__.load({
         'toast.title': 'surfbird 浏览器插件需要配置',
         'toast.body': '尚未配置 Kitesurf CDP 端点或无法连接。点击下方按钮前往插件设置完成配置。',
         'toast.action': '去设置', 'toast.dismiss': '暂不',
-        'row.fail': 'surfbird 调用失败',
+        'row.fail': 'surfbird 调用失败', 'img.zoom': '点击放大',
       },
       en: {
         'group.main': 'Connection', 'group.advanced': 'Advanced',
@@ -73,7 +73,7 @@ window.__ModuleLoader__.load({
         'toast.title': 'surfbird browser plugin needs setup',
         'toast.body': 'The Kitesurf CDP endpoint is not configured or unreachable. Open plugin settings to finish setup.',
         'toast.action': 'Open settings', 'toast.dismiss': 'Later',
-        'row.fail': 'surfbird call failed',
+        'row.fail': 'surfbird call failed', 'img.zoom': 'Click to zoom',
       },
     }
 
@@ -410,7 +410,7 @@ window.__ModuleLoader__.load({
       const el = React.createElement
       // 单张工具结果图片：loadImage 是 chat 注入的 Gateway 授权 loader，
       // 返回可直接放 <img> 的 URL；peek 有同步缓存就先用，避免闪烁。
-      function ToolResultImage({ att, loadImage }) {
+      function ToolResultImage({ att, loadImage, onPreview }) {
         const [url, setUrl] = React.useState(() => {
           try { return loadImage?.peek?.(att) } catch { return undefined }
         })
@@ -431,8 +431,8 @@ window.__ModuleLoader__.load({
         return el('img', {
           src: url,
           alt: att.name ?? 'surfbird screenshot',
-          title: `${att.width ?? '?'}×${att.height ?? '?'} · ${Math.round((att.bytes ?? 0) / 1024)}KB`,
-          onClick: () => { try { window.open(url, '_blank') } catch { /* */ } },
+          title: `${att.width ?? '?'}×${att.height ?? '?'} · ${Math.round((att.bytes ?? 0) / 1024)}KB · ${t('img.zoom')}`,
+          onClick: () => onPreview?.(url, att),
           style: {
             maxWidth: 360, maxHeight: 280, width: 'auto', height: 'auto', display: 'block',
             borderRadius: 6, border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)', cursor: 'zoom-in',
@@ -471,8 +471,42 @@ window.__ModuleLoader__.load({
         return el('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 } },
           row,
           el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, padding: '2px 0 4px' } },
-            images.map((att, i) => el(ToolResultImage, { key: att.attachmentId ?? i, att, loadImage }))))
+            images.map((att, i) => el(ToolResultImage, {
+              key: att.attachmentId ?? i, att, loadImage,
+              onPreview: (u, a) => showLightbox(u, a?.name ?? 'surfbird screenshot'),
+            }))))
       }
+    }
+
+    /** 应用内 lightbox：直接挂 document.body——chat 滚动容器带
+     *  container-type:inline-size，fixed 后代的包含块是它而非视口，
+     *  React 树内渲染的 overlay 会被关在聊天区里点不到遮罩。
+     *  原生 DOM overlay 无此问题；点击遮罩/×/Esc 关闭。 */
+    function showLightbox(url, alt) {
+      const ov = document.createElement('div')
+      ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.82);' +
+        'display:flex;align-items:center;justify-content:center;cursor:zoom-out'
+      const img = document.createElement('img')
+      img.src = url
+      img.alt = alt || ''
+      img.style.cssText = 'max-width:92vw;max-height:88vh;object-fit:contain;border-radius:8px;' +
+        'box-shadow:0 8px 40px rgba(0,0,0,0.5)'
+      img.addEventListener('click', (e) => e.stopPropagation())
+      const x = document.createElement('div')
+      x.textContent = '×'
+      x.style.cssText = 'position:fixed;top:16px;right:20px;color:#fff;font-size:22px;' +
+        'cursor:pointer;opacity:0.85;line-height:1;user-select:none'
+      const close = () => {
+        ov.remove()
+        window.removeEventListener('keydown', onKey)
+      }
+      const onKey = (e) => { if (e.key === 'Escape') close() }
+      ov.addEventListener('click', close)
+      x.addEventListener('click', close)
+      ov.appendChild(img)
+      ov.appendChild(x)
+      document.body.appendChild(ov)
+      window.addEventListener('keydown', onKey)
     }
 
     function apply(ctx) {
