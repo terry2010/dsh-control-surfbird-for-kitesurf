@@ -1,6 +1,6 @@
 {
   "name": "dsh-control-surfbird-for-kitesurf",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Control a Kitesurf browser engine over CDP from DSH via surfbird. Works with surfbird raw/auth deployments and upstream kitesurf.",
   "type": "module",
   "main": "lib/index.js",
@@ -62,11 +62,11 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-agent": ">=0.1.1-rc.1 <0.3.0",
-    "@deepseek-ai/dsh-attachment": ">=0.1.1-rc.1 <0.3.0",
-    "@deepseek-ai/dsh-llm": ">=0.1.1-rc.1 <0.3.0",
-    "@deepseek-ai/dsh-tools": ">=0.1.1-rc.1 <0.3.0",
-    "@deepseek-ai/dsh-util-values": ">=0.1.1-rc.1 <0.3.0"
+    "@deepseek-ai/dsh-agent": ">=0.2.0-rc.0 <0.3.0-0",
+    "@deepseek-ai/dsh-attachment": ">=0.2.0-rc.0 <0.3.0-0",
+    "@deepseek-ai/dsh-llm": ">=0.2.0-rc.0 <0.3.0-0",
+    "@deepseek-ai/dsh-tools": ">=0.2.0-rc.0 <0.3.0-0",
+    "@deepseek-ai/dsh-util-values": ">=0.2.0-rc.0 <0.3.0-0"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.1.0",
@@ -85,5 +85,25 @@
     "turndown": "^7.2.5",
     "ws": "~8.22.2",
     "yaml": "2.9.0"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-agent": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-attachment": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-llm": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-tools": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-util-values": {
+      "optional": true
+    }
   }
 }
