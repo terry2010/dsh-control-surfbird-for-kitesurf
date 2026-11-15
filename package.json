@@ -1,7 +1,7 @@
 {
-  "name": "dsh-control-kitesurf",
+  "name": "dsh-control-surfbird-for-kitesurf",
   "version": "0.0.1",
-  "description": "Control a Kitesurf browser engine over CDP from DSH. Works with surfbird raw/auth deployments and upstream kitesurf.",
+  "description": "Control a Kitesurf browser engine over CDP from DSH via surfbird. Works with surfbird raw/auth deployments and upstream kitesurf.",
   "type": "module",
   "main": "lib/index.js",
   "exports": {
@@ -38,7 +38,7 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/terry2010/dsh-control-kitesurf.git"
+    "url": "git+https://github.com/terry2010/dsh-control-surfbird-for-kitesurf.git"
   },
   "dsh": {
     "bundle": {
