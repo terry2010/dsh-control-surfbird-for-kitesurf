@@ -40,7 +40,11 @@
     "surfbird",
     "browser",
     "cdp",
-    "automation"
+    "automation",
+    "ai-agent",
+    "browser-automation",
+    "agent-tools",
+    "web-automation"
   ],
   "license": "Apache-2.0",
   "repository": {

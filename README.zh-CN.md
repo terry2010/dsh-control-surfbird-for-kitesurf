@@ -1,11 +1,17 @@
 # dsh-control-surfbird-for-kitesurf
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/dsh-control-surfbird-for-kitesurf)](https://www.npmjs.com/package/dsh-control-surfbird-for-kitesurf)
+[![npm downloads](https://img.shields.io/npm/dm/dsh-control-surfbird-for-kitesurf)](https://www.npmjs.com/package/dsh-control-surfbird-for-kitesurf)
 [![DSH](https://img.shields.io/badge/DSH-0.2.x-green.svg)](https://github.com/terry2010/dsh-control-surfbird-for-kitesurf)
 
 [English](README.md) | **中文**
 
 DSH（DeepSeek Harness）插件：让 AI agent 通过 Chrome DevTools Protocol（CDP）像人一样操控 [Kitesurf](https://github.com/cloudflare/kitesurf) 浏览器引擎。兼容自托管 [surfbird](https://github.com/terry2010/surfbird) 发行版（raw / token-auth 模式）和上游 Kitesurf 部署。提供 **28 个 `surfbird_*` 工具**：标签页管理、导航、语义化无障碍快照、点击/输入/填充、等待、JS 执行、截图、PDF 导出、console/network 检查——每个 agent 会话独享一个隔离浏览器。
+
+## 目录
+
+[特性](#特性) · [环境要求](#环境要求) · [安装](#安装) · [配置项](#配置项) · [使用方式](#使用方式) · [测试提示词](#测试提示词) · [引擎边界](#引擎边界) · [开发](#开发) · [常见问题](#常见问题) · [许可证](#许可证) · [相关项目](#相关项目)
 
 ## 特性
 

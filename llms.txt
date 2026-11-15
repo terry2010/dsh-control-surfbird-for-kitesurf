@@ -1,0 +1,26 @@
+# dsh-control-surfbird-for-kitesurf
+
+> DSH (DeepSeek Harness) plugin that lets an AI agent control a Kitesurf browser engine over CDP — 28 `surfbird_*` tools, one isolated browser per agent session. Works with the self-hosted surfbird distribution (raw/auth) and upstream Kitesurf.
+
+## Key facts
+
+- Package: `dsh-control-surfbird-for-kitesurf` on npm (Apache-2.0, Node >= 22.18, ESM)
+- Tool prefix: `surfbird_*` (26 typed tools + status/capabilities reporting)
+- Install: `dsh plugin --profile <name> add dsh-control-surfbird-for-kitesurf`
+- Requires a Kitesurf-compatible CDP endpoint (surfbird container `auth` mode recommended, or upstream Kitesurf)
+- Engine limits: no JS dialogs, file upload/download, clipboard, drag/touch, complete keyboard events
+- `src/cdp/` is host-independent shared core (zero `@deepseek-ai/*` imports) — designed to be copied into OpenCode/Pi plugins
+
+## Documentation
+
+- [README (English)](README.md) — features, install, configuration, all 28 tools, test prompts
+- [README (中文)](README.zh-CN.md) — Chinese version
+- [Agent skill doc](skills/surfbird-control/SKILL.md) — model-facing usage guide bundled with the plugin
+- [CHANGELOG](CHANGELOG.md) — release history
+- [Contributing](CONTRIBUTING.md) — dev setup and verification commands
+- [AGENTS.md](AGENTS.md) — repo conventions for coding agents
+
+## Related
+
+- [surfbird](https://github.com/terry2010/surfbird) — self-hosted Docker distribution of Kitesurf
+- [kitesurf](https://github.com/cloudflare/kitesurf) — upstream Cloudflare browser engine (Boa + DOM shim, not Chromium)
