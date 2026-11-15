@@ -311,7 +311,7 @@ window.__ModuleLoader__.load({
         // 密钥/密钥文件 二选一 toggle：tokenFile 非空→file，否则 token；
         // 切回 token 会清掉 tokenFile（tokenFile 优先级更高，不清则不生效）。
         // 设置页字段容器是两列 grid——authSection 用 gridColumn 整行横跨，
-        // 行内：[紧凑分段按钮][输入框 flex:1]（文件态再加 [选择文件]）。
+        // 视觉对齐 row()：toggle 居左（标签位），输入框固定宽靠右（文件态加 [选择文件]）。
         const segBtn = (modeKey, fieldKey) => el('button', {
           key: modeKey,
           onClick: () => {
@@ -331,18 +331,17 @@ window.__ModuleLoader__.load({
           style: { fontSize: 12, padding: '3px 10px', borderRadius: 6, whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0,
             border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)', background: 'transparent' },
         }, t('browse'))
-        const inputFill = { flex: 1, width: 'auto', minWidth: 0 }
         const authSection = (() => {
           const tokenF = groups.main?.find((f) => f.key === 'token')
           const fileF = groups.main?.find((f) => f.key === 'tokenFile')
           if (!tokenF || !fileF) return null
           return el('div', { key: 'auth', style: { gridColumn: '1 / -1', padding: '4px 0' } },
-            el('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+            el('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: 13, gap: 8 } },
               el('div', { style: { display: 'flex', gap: 4, flexShrink: 0 } }, segBtn('token', 'token'), segBtn('file', 'tokenFile')),
               mode === 'token'
-                ? control(tokenF, data.token, write, inputFill)
-                : el('div', { style: { display: 'flex', gap: 6, flex: 1, minWidth: 0, alignItems: 'center' } },
-                    control(fileF, data.tokenFile, write, inputFill), browseBtn)),
+                ? control(tokenF, data.token, write)
+                : el('div', { style: { display: 'flex', gap: 6, alignItems: 'center', flexShrink: 0 } },
+                    control(fileF, data.tokenFile, write), browseBtn)),
             mode === 'file' ? el('div', null,
               el('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-secondary,#888)', paddingTop: 2 } }, t('hint.tokenFile')),
               importNote ? el('div', {
