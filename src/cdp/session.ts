@@ -93,7 +93,8 @@ export class SessionBrowser {
       await b.connect(this.opts.endpoint!, this.opts.token)
     } catch (e) {
       b.disconnect()
-      throw e
+      const msg = e instanceof Error ? e.message : String(e)
+      throw new SurfbirdError('unreachable', `cannot reach Kitesurf endpoint ${this.opts.endpoint}: ${msg}`, { retryable: true })
     }
     this.browser = b
     this.wire(b)

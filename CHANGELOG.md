@@ -20,6 +20,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `surfbird_status` now returns `capabilities` — a machine-readable
   engine feature matrix (webmcp/pdf/clip/waits/unsupported list).
 
+### Fixed
+
+- Tool-row "Open settings" button now only appears for genuine
+  connection/config failures (`not_configured`, new `unreachable`
+  code for endpoint connect failures) — previously any `timeout`,
+  `cdp_error`, `browser_reset` or `no_tab` result also showed it,
+  e.g. a routine `surfbird_wait` timeout.
+- Transport-level `BrowserResetError`s now surface as
+  `browser_reset` (retryable) instead of generic `cdp_error`.
+
 ## [0.3.0] - 2026-11-15
 
 ### Added

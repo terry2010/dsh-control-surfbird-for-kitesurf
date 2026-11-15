@@ -26,7 +26,7 @@ import {
 } from '@deepseek-ai/dsh-tools'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import { SessionRegistry, type SessionBrowser } from './cdp/session.ts'
-import { SurfbirdError, type JsonObject } from './cdp/types.ts'
+import { SurfbirdError, isBrowserResetError, type JsonObject } from './cdp/types.ts'
 import { snapshot } from './cdp/snapshot.ts'
 import { axTree } from './cdp/ax.ts'
 import { waitFor, type WaitState } from './cdp/wait.ts'
@@ -106,6 +106,9 @@ function ok(data: JsonValue): JsonValue {
 function fail(e: unknown): JsonValue {
   if (e instanceof SurfbirdError) {
     return { ok: false, error: { code: e.code, message: e.message, retryable: e.retryable } }
+  }
+  if (isBrowserResetError(e)) {
+    return { ok: false, error: { code: 'browser_reset', message: e.message, retryable: true } }
   }
   const msg = e instanceof Error ? e.message : String(e)
   return { ok: false, error: { code: 'cdp_error', message: msg, retryable: false } }

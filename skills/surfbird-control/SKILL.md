@@ -65,7 +65,7 @@ Use `surfbird_find` to check whether specific text appears on the page, count oc
 
 ## Error codes
 
-`browser_reset` (connection dropped — all tabs gone, retry), `no_tab`/`bad_tab_id`/`not_attached` (tab problems — `surfbird_tabs`), `ref_stale`/`doc_changed` (re-snapshot), `no_article` (use snapshot instead), `bad_args` (invalid tool argument), `timeout` (raise timeoutMs or check state), `element_not_visible` (scroll into view or pick another target), `too_many_sessions` (too many concurrent agent sessions), `cdp_error` (engine/protocol error — message has details), `not_configured` (endpoint/token missing — direct user to plugin settings).
+`browser_reset` (connection dropped — all tabs gone, retry), `no_tab`/`bad_tab_id`/`not_attached` (tab problems — `surfbird_tabs`), `ref_stale`/`doc_changed` (re-snapshot), `no_article` (use snapshot instead), `bad_args` (invalid tool argument), `timeout` (raise timeoutMs or check state), `element_not_visible` (scroll into view or pick another target), `too_many_sessions` (too many concurrent agent sessions), `cdp_error` (engine/protocol error — message has details), `not_configured` (endpoint/token missing — direct user to plugin settings), `unreachable` (engine endpoint refused/unreachable — direct user to plugin settings or check the surfbird container).
 
 ## Session lifetime
 

@@ -34,7 +34,10 @@ window.__ModuleLoader__.load({
       'surfbird_network', 'surfbird_cdp',
     ]
     // 连接类错误 → 行内给设置入口
-    const CONN_CODES = new Set(['cdp_error', 'browser_reset', 'timeout', 'not_configured', 'no_tab'])
+    // 只匹配真正需要去设置页处理的错误：缺配置 / 引擎连不上。
+    // timeout（wait 超时）、cdp_error（selector 未命中等）、browser_reset、no_tab 都是
+    // 运行期问题，开设置解决不了——之前 timeout 混进来导致 wait 超时也弹设置按钮。
+    const CONN_CODES = new Set(['not_configured', 'unreachable'])
 
     const DICT = {
       zh: {
@@ -453,7 +456,7 @@ window.__ModuleLoader__.load({
           el('span', null, name),
           connFail
             ? el('button', {
-                onClick: () => nav?.openBundle?.(ID),
+                onClick: () => { try { nav?.openBundle?.(ID) } catch { /* */ } },
                 style: { fontSize: 11, padding: '1px 8px', borderRadius: 8, cursor: 'pointer',
                   border: '1px solid #cf222e', color: '#cf222e', background: 'transparent' },
                 title: code,
