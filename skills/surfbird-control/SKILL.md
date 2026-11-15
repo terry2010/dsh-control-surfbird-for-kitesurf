@@ -18,6 +18,7 @@ You control a real Kitesurf browser engine through `surfbird_*` tools. Each agen
 - **Observe**: `surfbird_snapshot` returns a semantic digest — `[eN] role "name" → href` for interactive elements, `[hN]` headings, `[tN]` text. Use `surfbird_ax` for the accessibility tree when semantics matter. Use `surfbird_extract` for article→Markdown on content pages. Use `surfbird_find` to locate text on the page (Ctrl+F semantics: counts matches, scrolls to each, returns context snippet — no visual highlight). Use `surfbird_links` for "what links does this page have". Check `surfbird_webmcp action=list` early — some pages register their own tools.
 - **Act**: click/fill/type/press_key/scroll/navigate using `eN` refs or CSS selectors.
 - **Verify**: after every mutating action, confirm the effect — `surfbird_wait` for conditions, `surfbird_snapshot` for state, `surfbird_console`/`surfbird_network` for diagnostics.
+- **Read, don't navigate**: to check the current URL or page state use `surfbird_evaluate` (`location.href`) or the URL line in `surfbird_snapshot` output — calling `surfbird_navigate` just to "check where you are" reloads the page and wipes form/dropdown state.
 
 ## Refs and document tokens
 

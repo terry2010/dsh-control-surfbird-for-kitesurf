@@ -246,7 +246,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'surfbird_navigate',
-    description: 'Navigate the current (or given) tab to a URL. Page.navigate returns before load finishes — pass wait=\'load\' (default) or use surfbird_wait afterwards. History APIs are not involved.',
+    description: 'Navigate the current (or given) tab to a URL — this reloads the page and loses form/dropdown state. Page.navigate returns before load finishes — pass wait=\'load\' (default) or use surfbird_wait afterwards. To check the current URL without side effects use surfbird_evaluate (location.href); surfbird_snapshot output also shows it. History APIs are not involved.',
     parameters: {
       url: REQ_S('URL to navigate to.'),
       tabId: TAB_ID,
