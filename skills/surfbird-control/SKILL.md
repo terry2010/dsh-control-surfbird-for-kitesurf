@@ -37,6 +37,7 @@ You control a real Kitesurf browser engine through `surfbird_*` tools. Each agen
 
 - `surfbird_click`/`double_click`/`fill`/`type`/`press_key` may silently no-op on some pages — the engine swallows input errors. **Always verify** with wait/snapshot afterwards.
 - `fill` replaces the whole value and fires `input`/`change` events (works on React/Vue controlled inputs). `type` inserts text at the caret — it does not fire complete keyboard events.
+- `fill`/`type` only put text into a field — they do **not** submit. For search boxes and forms, follow with `surfbird_press_key` `enter` on the field, click the submit control, or `surfbird_evaluate` a form `.requestSubmit()`, then `surfbird_wait` for the result before snapshot/screenshot.
 - `press_key` supports ~60 named keys (enter, tab, escape, arrows, f1-f12, punctuation); `modifiers` bitmask: Alt=1 Ctrl=2 Meta=4 Shift=8.
 - No JS dialogs, file upload/download, clipboard, drag/touch, or real keyboard events — do not promise these.
 

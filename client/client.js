@@ -481,29 +481,108 @@ window.__ModuleLoader__.load({
     /** 应用内 lightbox：直接挂 document.body——chat 滚动容器带
      *  container-type:inline-size，fixed 后代的包含块是它而非视口，
      *  React 树内渲染的 overlay 会被关在聊天区里点不到遮罩。
-     *  原生 DOM overlay 无此问题；点击遮罩/×/Esc 关闭。 */
+     *  原生 DOM overlay 无此问题。
+     *  stage 是 overflow:auto 的 flex 容器：img margin:auto 小图居中、大图可滚动；
+     *  滚轮以视口中心为锚缩放，pointer 拖拽平移，双击切换 fit/100%。 */
     function showLightbox(url, alt) {
       const ov = document.createElement('div')
-      ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.82);' +
-        'display:flex;align-items:center;justify-content:center;cursor:zoom-out'
+      ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(0,0,0,0.82)'
+      const stage = document.createElement('div')
+      stage.style.cssText = 'position:absolute;inset:0;overflow:auto;display:flex;cursor:grab;' +
+        'align-items:stretch;justify-content:stretch'
+      const pad = 40
       const img = document.createElement('img')
       img.src = url
       img.alt = alt || ''
-      img.style.cssText = 'max-width:92vw;max-height:88vh;object-fit:contain;border-radius:8px;' +
-        'box-shadow:0 8px 40px rgba(0,0,0,0.5)'
-      img.addEventListener('click', (e) => e.stopPropagation())
+      img.draggable = false
+      img.style.cssText = 'margin:auto;flex:none;object-fit:contain;border-radius:8px;' +
+        'box-shadow:0 8px 40px rgba(0,0,0,0.5);user-select:none;-webkit-user-drag:none'
+      let zoom = null // null=fit 视口；数字=自然尺寸倍数
+      const apply = () => {
+        if (!img.naturalWidth) return
+        let w
+        if (zoom === null) {
+          const f = Math.min((stage.clientWidth - pad * 2) / img.naturalWidth,
+            (stage.clientHeight - pad * 2) / img.naturalHeight, 1)
+          w = Math.round(img.naturalWidth * f)
+        } else {
+          w = Math.round(img.naturalWidth * zoom)
+        }
+        img.style.width = w + 'px'
+        img.style.height = 'auto'
+      }
+      img.addEventListener('load', apply)
+      const onResize = () => apply()
+      window.addEventListener('resize', onResize)
+
+      stage.addEventListener('wheel', (e) => {
+        e.preventDefault()
+        if (!img.naturalWidth) return
+        const fitF = Math.min((stage.clientWidth - pad * 2) / img.naturalWidth,
+          (stage.clientHeight - pad * 2) / img.naturalHeight, 1)
+        const cur = zoom === null ? fitF : zoom
+        let next = cur * Math.exp(-e.deltaY * 0.002)
+        next = Math.min(8, Math.max(fitF * 0.5, next))
+        if (Math.abs(next - fitF) < fitF * 0.02) next = fitF
+        const ratio = next / cur
+        const cx = stage.scrollLeft + stage.clientWidth / 2
+        const cy = stage.scrollTop + stage.clientHeight / 2
+        zoom = next === fitF ? null : next
+        apply()
+        stage.scrollLeft = cx * ratio - stage.clientWidth / 2
+        stage.scrollTop = cy * ratio - stage.clientHeight / 2
+      }, { passive: false })
+
+      let drag = null, dragged = false
+      stage.addEventListener('pointerdown', (e) => {
+        if (e.button !== 0) return
+        drag = { x: e.clientX, y: e.clientY, sl: stage.scrollLeft, st: stage.scrollTop }
+        dragged = false
+        stage.style.cursor = 'grabbing'
+        try { stage.setPointerCapture(e.pointerId) } catch { /* */ }
+      })
+      stage.addEventListener('pointermove', (e) => {
+        if (!drag) return
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y
+        if (!dragged && Math.abs(dx) + Math.abs(dy) > 4) dragged = true
+        if (dragged) {
+          stage.scrollLeft = drag.sl - dx
+          stage.scrollTop = drag.st - dy
+        }
+      })
+      const endDrag = () => { drag = null; stage.style.cursor = 'grab' }
+      stage.addEventListener('pointerup', endDrag)
+      stage.addEventListener('pointercancel', endDrag)
+
+      img.addEventListener('dblclick', (e) => {
+        e.stopPropagation()
+        zoom = zoom === null ? 1 : null
+        apply()
+      })
+
+      const hint = document.createElement('div')
+      hint.textContent = '滚轮缩放 · 拖拽平移 · 双击复位'
+      hint.style.cssText = 'position:fixed;bottom:14px;left:50%;transform:translateX(-50%);' +
+        'color:rgba(255,255,255,0.55);font-size:12px;user-select:none;pointer-events:none'
+
       const x = document.createElement('div')
       x.textContent = '×'
       x.style.cssText = 'position:fixed;top:16px;right:20px;color:#fff;font-size:22px;' +
-        'cursor:pointer;opacity:0.85;line-height:1;user-select:none'
+        'cursor:pointer;opacity:0.85;line-height:1;user-select:none;z-index:1'
       const close = () => {
         ov.remove()
         window.removeEventListener('keydown', onKey)
+        window.removeEventListener('resize', onResize)
       }
       const onKey = (e) => { if (e.key === 'Escape') close() }
-      ov.addEventListener('click', close)
+      stage.addEventListener('click', (e) => {
+        if (dragged) { dragged = false; return }
+        if (e.target === stage) close()
+      })
       x.addEventListener('click', close)
-      ov.appendChild(img)
+      stage.appendChild(img)
+      ov.appendChild(stage)
+      ov.appendChild(hint)
       ov.appendChild(x)
       document.body.appendChild(ov)
       window.addEventListener('keydown', onKey)
