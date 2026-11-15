@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `surfbird_wait` gains `networkidle` (no in-flight requests for ~500ms,
+  tracked via the network buffer) and `stable` (no DOM mutations for
+  ~500ms via MutationObserver) states — for SPA/async pages that keep
+  changing after the `load` event.
+- `surfbird_screenshot` and `surfbird_pdf` accept `waitFor`
+  (`none`/`load`/`domcontentloaded`/`networkidle`/`stable`, default
+  `load`) + `timeoutMs`, so captures wait for the page to settle instead
+  of racing a still-loading document.
+- Refs now carry their element tag, and `doc_changed` first attempts a
+  selector re-resolve (with tag verification) before failing — same-page
+  navigations that bump the document generation no longer kill refs that
+  still point at the same element.
+
+### Fixed
+
+- `surfbird_fill` via `Kitesurf.setControlValue` now dispatches
+  `input`/`change` events (re-setting the value through the native
+  prototype setter first, so framework value trackers see the change) —
+  React/Vue controlled inputs previously ignored fills entirely.
+- `Kitesurf.setControlValue` now passes `targetId` explicitly; the
+  engine-level method defaulted to the first page target, which could
+  fail with `no PageScript` or write into the wrong tab.
+- `fill`'s DOM fallback passed `{value}` where a raw string was expected,
+  so `input.value` became `[object Object]` instead of the typed text.
+
 ## [0.2.0] - 2026-11-15
 
 ### Added

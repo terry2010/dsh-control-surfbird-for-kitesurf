@@ -138,6 +138,21 @@ test('NetworkBuffer: 聚合 + sinceIndex + sessionIdOf', () => {
   assert.equal(inc.entries.length, 0)
 })
 
+test('NetworkBuffer: inFlightCount + lastActivityAt（networkidle 判定）', () => {
+  const buf = new NetworkBuffer(10)
+  assert.equal(buf.inFlightCount(), 0)
+  const t0 = buf.lastActivityAt
+  buf.onRequestWillBeSent('S1', { requestId: 'r1', request: { url: 'http://a/', method: 'GET' } })
+  assert.equal(buf.inFlightCount(), 1)
+  assert.ok(buf.lastActivityAt > t0)
+  buf.onRequestWillBeSent('S1', { requestId: 'r2', request: { url: 'http://b/', method: 'GET' } })
+  assert.equal(buf.inFlightCount(), 2)
+  buf.onLoadingFinished({ requestId: 'r1' })
+  assert.equal(buf.inFlightCount(), 1)
+  buf.onLoadingFailed({ requestId: 'r2', errorText: 'net::ERR' })
+  assert.equal(buf.inFlightCount(), 0)
+})
+
 // ---------- snapshot digest（fake sess，无引擎） ----------
 
 function el(nodeId, tag, attrsObj = {}, children = [], nodeName) {

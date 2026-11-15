@@ -122,7 +122,7 @@ async function objectIdOf(sess: SessionBrowser, r: ResolvedTab, nodeId: number, 
   return typeof obj.objectId === 'string' ? obj.objectId : undefined
 }
 
-async function callOnElement(sess: SessionBrowser, r: ResolvedTab, objectId: string, fn: string, args: JsonObject[] = [], signal?: AbortSignal): Promise<Json> {
+async function callOnElement(sess: SessionBrowser, r: ResolvedTab, objectId: string, fn: string, args: Json[] = [], signal?: AbortSignal): Promise<Json> {
   const res = await sess.cdp('Runtime.callFunctionOn', {
     objectId,
     functionDeclaration: fn,
@@ -144,10 +144,32 @@ export async function fill(sess: SessionBrowser, r: ResolvedTab, t: Target, valu
     /* 元素可能已 detached——由后续调用报真实错误 */
   }
 
-  const res = await sess.cdp('Kitesurf.setControlValue', { nodeId, value }, { sessionId: r.sessionId, signal })
+  // targetId 必须显式带上——Kitesurf.* 是 browser 级方法，缺省会落到 firstPageTarget，
+  // 多 tab 时可能命中错误 target（"no PageScript" 或改错页面的元素）。
+  const res = await sess.cdp('Kitesurf.setControlValue', { nodeId, value, targetId: r.tab.targetId }, { sessionId: r.sessionId, signal })
   const changed = res.changed === true
   const err = typeof res.error === 'string' ? res.error : undefined
-  if (changed && !err) return { method: 'setControlValue', changed: true }
+  if (changed && !err) {
+    // setControlValue 只改底层 value，不派发事件——React/Vue 受控组件感知不到。
+    // 先经原生 prototype setter 重设值（绕过框架在实例上的 value tracker），再补发 input/change。
+    const objectId = await objectIdOf(sess, r, nodeId, signal)
+    if (objectId) {
+      await callOnElement(sess, r, objectId, `function(){
+        var e=this;
+        try{
+          var p=null;
+          if(e.tagName==='INPUT'&&window.HTMLInputElement)p=window.HTMLInputElement;
+          else if(e.tagName==='TEXTAREA'&&window.HTMLTextAreaElement)p=window.HTMLTextAreaElement;
+          var d=p&&Object.getOwnPropertyDescriptor(p.prototype,'value');
+          if(d&&d.set)d.set.call(e,e.value);
+        }catch(_){}
+        try{e.dispatchEvent(new Event('input',{bubbles:true}));}catch(_){}
+        try{e.dispatchEvent(new Event('change',{bubbles:true}));}catch(_){}
+        return true;
+      }`, [], signal).catch(() => { /* 事件补发失败不影响 fill 结果 */ })
+    }
+    return { method: 'setControlValue', changed: true }
+  }
 
   // fallback：objectId 路径
   const objectId = await objectIdOf(sess, r, nodeId, signal)
@@ -161,7 +183,7 @@ export async function fill(sess: SessionBrowser, r: ResolvedTab, t: Target, valu
     try{e.dispatchEvent(new Event('input',{bubbles:true}));}catch(_){}
     try{e.dispatchEvent(new Event('change',{bubbles:true}));}catch(_){}
     return {value:e.value,tag:e.tagName};
-  }`, [{ value }], signal)
+  }`, [value], signal)
   const ok = typeof out === 'object' && out !== null
   return { method: 'dom', changed: ok, error: ok ? undefined : (err ?? 'fallback failed') }
 }

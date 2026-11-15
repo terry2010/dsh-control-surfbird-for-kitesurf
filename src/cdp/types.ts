@@ -103,7 +103,9 @@ export interface RefEntry {
   nodeId: number
   /** CSS nth-of-type 兜底路径，nodeId 失效时重查。 */
   selector?: string
-  /** 签发时的文档代数 token；不匹配 → doc_changed。 */
+  /** 元素 tag（大写）——selector 重解析后校验，防止复活到错误元素。 */
+  tag?: string
+  /** 签发时的文档代数 token；不匹配 → 先尝试 selector 重解析，失败才 doc_changed。 */
   docToken: string
 }
 

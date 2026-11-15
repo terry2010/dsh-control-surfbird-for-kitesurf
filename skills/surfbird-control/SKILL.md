@@ -21,7 +21,7 @@ You control a real Kitesurf browser engine through `surfbird_*` tools. Each agen
 
 ## Refs and document tokens
 
-- `eN` refs come from `surfbird_snapshot` and are **tab-scoped and generation-scoped**. Any navigation, reload, or `setDocumentContent` invalidates them (`doc_changed`). Always re-snapshot before reusing a ref after page changes.
+- `eN` refs come from `surfbird_snapshot` and are **tab-scoped and generation-scoped**. Any navigation, reload, or `setDocumentContent` bumps the generation — refs then attempt a selector re-resolve (same element survives, `doc_changed` only if it can't); re-snapshot when a call still reports `doc_changed`.
 - `truncated`/`omitted` in snapshot output means you hit the budget — narrow with `selector` or raise `maxChars`/`maxNodes`.
 - `surfbird_wait` accepts `target: {ref}` or `{selector}` for visible/hidden/enabled checks.
 
@@ -31,12 +31,12 @@ You control a real Kitesurf browser engine through `surfbird_*` tools. Each agen
 
 ## Waiting
 
-`Page.navigate` returns **before** load finishes. After navigate/back/forward/reload — or any click that may navigate — call `surfbird_wait state=load` (or `domcontentloaded`). Other states: `url` (substring match), `text`/`text_gone` (substring in page text or a selector's text), `visible`/`hidden`/`enabled` (needs target ref or selector). Default timeout 30s; raise `timeoutMs` for slow pages.
+`Page.navigate` returns **before** load finishes. After navigate/back/forward/reload — or any click that may navigate — call `surfbird_wait state=load` (or `domcontentloaded`). Other states: `url` (substring match), `text`/`text_gone` (substring in page text or a selector's text), `visible`/`hidden`/`enabled` (needs target ref or selector), `networkidle` (no in-flight requests for ~500ms), `stable` (no DOM mutations for ~500ms). Default timeout 30s; raise `timeoutMs` for slow pages. `load` fires before async content finishes — for SPA/JS-rendered pages prefer `networkidle` or `stable` before snapshot/screenshot.
 
 ## Input caveats (engine limits)
 
 - `surfbird_click`/`double_click`/`fill`/`type`/`press_key` may silently no-op on some pages — the engine swallows input errors. **Always verify** with wait/snapshot afterwards.
-- `fill` replaces the whole value (native `setControlValue`, falls back to DOM events). `type` inserts text at the caret — it does not fire complete keyboard events.
+- `fill` replaces the whole value and fires `input`/`change` events (works on React/Vue controlled inputs). `type` inserts text at the caret — it does not fire complete keyboard events.
 - `press_key` supports ~60 named keys (enter, tab, escape, arrows, f1-f12, punctuation); `modifiers` bitmask: Alt=1 Ctrl=2 Meta=4 Shift=8.
 - No JS dialogs, file upload/download, clipboard, drag/touch, or real keyboard events — do not promise these.
 
@@ -46,8 +46,8 @@ You control a real Kitesurf browser engine through `surfbird_*` tools. Each agen
 
 ## Screenshots and PDF
 
-- `surfbird_screenshot` returns an image attachment when available; otherwise a file path (`attachmentUnavailable`). `fullPage` is capped ~1440px tall by the engine.
-- `surfbird_pdf` always returns a file path — PDFs are not image attachments.
+- `surfbird_screenshot` waits for `load` by default before capturing (`waitFor` param: `none`/`load`/`domcontentloaded`/`networkidle`/`stable`, `timeoutMs` caps the wait). Pass `waitFor=networkidle` or `stable` when the page keeps mutating after load — a `load`-only wait can still capture a half-rendered SPA. Returns an image attachment when available; otherwise a file path (`attachmentUnavailable`). `fullPage` is capped ~1440px tall by the engine.
+- `surfbird_pdf` has the same `waitFor`/`timeoutMs` params and always returns a file path — PDFs are not image attachments.
 
 ## Diagnostics
 

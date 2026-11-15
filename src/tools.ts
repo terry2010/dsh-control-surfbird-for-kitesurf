@@ -204,7 +204,7 @@ const TOOLS: ToolDef[] = [
     description: 'Open a new tab (becomes current). If url is given, navigates immediately — createTarget alone does not navigate. wait=\'load\' (default when url given) blocks until load; use \'none\' to return immediately. Returns the new tab id.',
     parameters: {
       url: S('Optional URL to navigate to right after creating the tab.'),
-      wait: { type: 'string', enum: ['load', 'domcontentloaded', 'none'], description: "Wait after navigating (only with url). Default 'load'." },
+      wait: { type: 'string', enum: ['load', 'domcontentloaded', 'networkidle', 'stable', 'none'], description: "Wait after navigating (only with url). Default 'load'." },
       timeoutMs: TIMEOUT,
     },
     run: async (sess, args, exec) => {
@@ -245,7 +245,7 @@ const TOOLS: ToolDef[] = [
     parameters: {
       url: REQ_S('URL to navigate to.'),
       tabId: TAB_ID,
-      wait: { type: 'string', enum: ['load', 'domcontentloaded', 'none'], description: "Wait after navigate. Default 'load'. 'none' returns immediately." },
+      wait: { type: 'string', enum: ['load', 'domcontentloaded', 'networkidle', 'stable', 'none'], description: "Wait after navigate. Default 'load'. 'none' returns immediately." },
       timeoutMs: TIMEOUT,
     },
     run: async (sess, args, exec) => {
@@ -266,7 +266,7 @@ const TOOLS: ToolDef[] = [
   {
     name: 'surfbird_back',
     description: 'Go back in tab history. Errors if no back entry exists.',
-    parameters: { tabId: TAB_ID, wait: { type: 'string', enum: ['load', 'domcontentloaded', 'none'], description: "Default 'load'." } },
+    parameters: { tabId: TAB_ID, wait: { type: 'string', enum: ['load', 'domcontentloaded', 'networkidle', 'stable', 'none'], description: "Default 'load'." } },
     run: async (sess, args, exec) => {
       const res = await sess.goHistory(strArg(args.tabId), 'back')
       const wait = strArg(args.wait) ?? 'load'
@@ -277,7 +277,7 @@ const TOOLS: ToolDef[] = [
   {
     name: 'surfbird_forward',
     description: 'Go forward in tab history. Errors if no forward entry exists.',
-    parameters: { tabId: TAB_ID, wait: { type: 'string', enum: ['load', 'domcontentloaded', 'none'], description: "Default 'load'." } },
+    parameters: { tabId: TAB_ID, wait: { type: 'string', enum: ['load', 'domcontentloaded', 'networkidle', 'stable', 'none'], description: "Default 'load'." } },
     run: async (sess, args, exec) => {
       const res = await sess.goHistory(strArg(args.tabId), 'forward')
       const wait = strArg(args.wait) ?? 'load'
@@ -288,7 +288,7 @@ const TOOLS: ToolDef[] = [
   {
     name: 'surfbird_reload',
     description: 'Reload the tab. hard=true bypasses cache (Page.reload ignoreCache).',
-    parameters: { tabId: TAB_ID, hard: SB('Bypass cache.'), wait: { type: 'string', enum: ['load', 'domcontentloaded', 'none'], description: "Default 'load'." } },
+    parameters: { tabId: TAB_ID, hard: SB('Bypass cache.'), wait: { type: 'string', enum: ['load', 'domcontentloaded', 'networkidle', 'stable', 'none'], description: "Default 'load'." } },
     run: async (sess, args, exec) => {
       const res = await sess.reload(strArg(args.tabId), { ignoreCache: boolArg(args.hard) === true })
       const wait = strArg(args.wait) ?? 'load'
@@ -298,9 +298,9 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'surfbird_wait',
-    description: 'Wait for a page condition: load/domcontentloaded/url/text/text_gone/visible/hidden/enabled. url waits match substring; text waits match page innerText or a selector\'s text; visible/hidden/enabled take target(ref/selector).',
+    description: 'Wait for a page condition: load/domcontentloaded/url/text/text_gone/visible/hidden/enabled/networkidle/stable. url waits match substring; text waits match page innerText or a selector\'s text; visible/hidden/enabled take target(ref/selector). networkidle = no in-flight requests for ~500ms; stable = no DOM mutations for ~500ms (best for SPA/async pages before screenshot).',
     parameters: {
-      state: { type: 'string', required: true, enum: ['load', 'domcontentloaded', 'url', 'text', 'text_gone', 'visible', 'hidden', 'enabled'], description: 'Condition to wait for.' },
+      state: { type: 'string', required: true, enum: ['load', 'domcontentloaded', 'url', 'text', 'text_gone', 'visible', 'hidden', 'enabled', 'networkidle', 'stable'], description: 'Condition to wait for.' },
       tabId: TAB_ID,
       url: S('For state=url: substring the final URL must contain.'),
       text: S('For state=text/text_gone: literal substring to look for.'),
@@ -455,6 +455,8 @@ const TOOLS: ToolDef[] = [
         },
         additionalProperties: false,
       },
+      waitFor: { type: 'string', enum: ['none', 'load', 'domcontentloaded', 'networkidle', 'stable'], description: "Wait for this state before capturing (default 'load'). Use 'networkidle' or 'stable' for SPA/async pages that keep mutating after load; 'none' captures immediately." },
+      timeoutMs: TIMEOUT,
     },
     run: async (sess, args, exec) => screenshot(sess, activeDeps!, args, exec),
   },
@@ -473,6 +475,8 @@ const TOOLS: ToolDef[] = [
       marginBottom: SN('Bottom margin in inches.'),
       marginLeft: SN('Left margin in inches.'),
       marginRight: SN('Right margin in inches.'),
+      waitFor: { type: 'string', enum: ['none', 'load', 'domcontentloaded', 'networkidle', 'stable'], description: "Wait for this state before printing (default 'load')." },
+      timeoutMs: TIMEOUT,
     },
     run: async (sess, args, exec) => pdf(sess, activeDeps!, args, exec),
   },
@@ -642,6 +646,10 @@ function clipArg(v: JsonValue | undefined): { x: number; y: number; width: numbe
 
 async function screenshot(sess: SessionBrowser, deps: ToolsDeps, args: Record<string, JsonValue>, exec: ToolRunContext): Promise<JsonValue> {
   const r = await sess.resolveTab(strArg(args.tabId))
+  const waitState = strArg(args.waitFor) ?? 'load'
+  if (waitState !== 'none') {
+    await waitFor(sess, { tabId: strArg(args.tabId), state: waitState as WaitState, timeoutMs: numArg(args.timeoutMs), signal: exec.signal })
+  }
   const format = strArg(args.format) ?? 'png'
   const params: JsonObject = { format }
   if (format !== 'png') {
@@ -707,6 +715,10 @@ async function screenshot(sess: SessionBrowser, deps: ToolsDeps, args: Record<st
 
 async function pdf(sess: SessionBrowser, deps: ToolsDeps, args: Record<string, JsonValue>, exec: ToolRunContext): Promise<JsonValue> {
   const r = await sess.resolveTab(strArg(args.tabId))
+  const waitState = strArg(args.waitFor) ?? 'load'
+  if (waitState !== 'none') {
+    await waitFor(sess, { tabId: strArg(args.tabId), state: waitState as WaitState, timeoutMs: numArg(args.timeoutMs), signal: exec.signal })
+  }
   const params: JsonObject = {
     landscape: boolArg(args.landscape) === true,
     printBackground: boolArg(args.printBackground) !== false,

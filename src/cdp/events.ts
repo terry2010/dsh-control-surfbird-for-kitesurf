@@ -73,6 +73,8 @@ export class NetworkBuffer {
   private order: string[] = []
   private seq = 0
   private readonly cap: number
+  /** 最近一次网络事件时间戳——networkidle 用它做"静默窗口"判定。 */
+  lastActivityAt = 0
   constructor(cap = DEFAULT_CAP) {
     this.cap = cap
   }
@@ -94,6 +96,7 @@ export class NetworkBuffer {
   onRequestWillBeSent(sessionId: string, p: JsonObject | undefined): void {
     const requestId = String(p?.requestId ?? '')
     if (!requestId) return
+    this.lastActivityAt = Date.now()
     const req = (p?.request ?? {}) as JsonObject
     const s = this.touch(requestId)
     s.sessionId = sessionId
@@ -108,6 +111,7 @@ export class NetworkBuffer {
   onResponseReceived(p: JsonObject | undefined): void {
     const requestId = String(p?.requestId ?? '')
     if (!requestId) return
+    this.lastActivityAt = Date.now()
     const s = this.byId.get(requestId)
     if (!s) return
     const res = (p?.response ?? {}) as JsonObject
@@ -117,6 +121,7 @@ export class NetworkBuffer {
 
   onLoadingFinished(p: JsonObject | undefined): void {
     const requestId = String(p?.requestId ?? '')
+    this.lastActivityAt = Date.now()
     const s = requestId ? this.byId.get(requestId) : undefined
     if (s) {
       s.done = true
@@ -127,6 +132,7 @@ export class NetworkBuffer {
 
   onLoadingFailed(p: JsonObject | undefined): void {
     const requestId = String(p?.requestId ?? '')
+    this.lastActivityAt = Date.now()
     const s = requestId ? this.byId.get(requestId) : undefined
     if (!s) return
     s.done = true
@@ -149,6 +155,16 @@ export class NetworkBuffer {
       this.order = []
     }
     return { entries, nextIndex, total: this.order.length }
+  }
+
+  /** 进行中的请求数（requestWillBeSent 后未见 finished/failed）。networkidle 判定用。 */
+  inFlightCount(): number {
+    let n = 0
+    for (const id of this.order) {
+      const s = this.byId.get(id)
+      if (s && !s.done) n++
+    }
+    return n
   }
 
   sessionIdOf(requestId: string): string | undefined {

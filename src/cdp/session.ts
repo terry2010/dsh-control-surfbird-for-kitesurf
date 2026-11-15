@@ -302,10 +302,11 @@ export class SessionBrowser {
     return this.nextRefId
   }
 
-  mintRef(tab: TabInfo, nodeId: number, selector?: string): RefEntry {
+  mintRef(tab: TabInfo, nodeId: number, selector?: string, tag?: string): RefEntry {
     const id = this.nextRefId++
     const ref: RefEntry = { id, tabId: tab.targetId, nodeId, docToken: this.docToken(tab) }
     if (selector) ref.selector = selector
+    if (tag) ref.tag = tag
     this.refs.set(id, ref)
     return ref
   }
@@ -318,9 +319,36 @@ export class SessionBrowser {
       throw new SurfbirdError('ref_stale', `ref e${refId} belongs to another tab — re-run surfbird_snapshot on this tab`)
     }
     if (ref.docToken !== this.docToken(tab)) {
+      // docToken 失配先按 selector 重解析——SPA 同文档导航/pushState 也会 bump navSeq，
+      // 过度失效时 selector+tag 还能救回同一元素；救不回才报 doc_changed。
+      const revived = await this.tryReviveRef(ref, tab)
+      if (revived !== undefined) return revived
       throw new SurfbirdError('doc_changed', `document changed since ref e${refId} was issued — re-run surfbird_snapshot`)
     }
     return ref.nodeId
+  }
+
+  /** selector 重查 + tag 校验；成功则原地更新 ref 的 nodeId/docToken。 */
+  private async tryReviveRef(ref: RefEntry, tab: TabInfo): Promise<number | undefined> {
+    if (!ref.selector || !tab.sessionId) return undefined
+    try {
+      const doc = await this.cdp('DOM.getDocument', { depth: 0 }, { sessionId: tab.sessionId })
+      const rootId = (doc.root as JsonObject | undefined)?.nodeId
+      if (typeof rootId !== 'number') return undefined
+      const q = await this.cdp('DOM.querySelector', { nodeId: rootId, selector: ref.selector }, { sessionId: tab.sessionId })
+      const nodeId = typeof q.nodeId === 'number' ? q.nodeId : 0
+      if (!nodeId) return undefined
+      if (ref.tag) {
+        const d = await this.cdp('DOM.describeNode', { nodeId }, { sessionId: tab.sessionId })
+        const name = String(((d.node as JsonObject | undefined)?.nodeName) ?? '')
+        if (name.toUpperCase() !== ref.tag) return undefined
+      }
+      ref.nodeId = nodeId
+      ref.docToken = this.docToken(tab)
+      return nodeId
+    } catch {
+      return undefined
+    }
   }
 
   getRef(refId: number): RefEntry | undefined {

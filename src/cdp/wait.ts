@@ -16,6 +16,8 @@ import { SurfbirdError, type JsonObject } from './types.ts'
 
 const POLL_MS = 250
 const DEFAULT_TIMEOUT_MS = 30_000
+/** networkidle/stable 的"静默窗口"：无活动持续该时长才算就绪（对齐 Playwright networkidle）。 */
+const IDLE_QUIET_MS = 500
 
 export type WaitState =
   | 'load'
@@ -26,6 +28,8 @@ export type WaitState =
   | 'visible'
   | 'hidden'
   | 'enabled'
+  | 'networkidle'
+  | 'stable'
 
 export interface WaitOptions {
   tabId?: string
@@ -122,6 +126,19 @@ async function probe(sess: SessionBrowser, r: ResolvedTab, o: WaitOptions): Prom
       const v = await sess.evaluate(r, expr, { signal: o.signal })
       const has = String(v ?? '').includes(needle)
       return o.state === 'text' ? has : !has
+    }
+    case 'networkidle': {
+      // 无 buffer = 未观测到任何网络事件 = 视为空闲；有挂起请求或静默窗口未满 → 继续等
+      const b = sess.buffersFor(r.sessionId)?.network
+      if (!b) return true
+      return b.inFlightCount() === 0 && Date.now() - b.lastActivityAt >= IDLE_QUIET_MS
+    }
+    case 'stable': {
+      // MutationObserver 静默窗口：安装观察者后 quietMs 内无 DOM 变更即就绪。
+      // 导航销毁 window → 下次探测自动重装；MutationObserver 缺失时退化为 readyState。
+      const quiet = IDLE_QUIET_MS
+      const v = await sess.evaluate(r, `(()=>{var w=window;if(typeof MutationObserver==='undefined'||!document||!document.documentElement)return !!(document&&document.readyState==='complete');if(!w.__sbStableObs){w.__sbStableAt=Date.now();try{w.__sbStableObs=new MutationObserver(function(){w.__sbStableAt=Date.now()});w.__sbStableObs.observe(document.documentElement,{childList:true,subtree:true,attributes:true,characterData:true})}catch(e){w.__sbStableObs=null;return document.readyState==='complete'}}return Date.now()-(w.__sbStableAt||0)>=${quiet}})()`, { signal: o.signal })
+      return v === true
     }
     case 'visible':
     case 'hidden':

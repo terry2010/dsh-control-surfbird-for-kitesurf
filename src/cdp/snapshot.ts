@@ -210,7 +210,7 @@ function visit(ctx: Ctx, node: DomNode, segs: PathSeg[], insideSkippable: boolea
       if (ctx.emitted >= ctx.maxNodes || ctx.chars + line.length + 1 > ctx.maxChars) {
         ctx.truncated = true
       } else {
-        const ref = ctx.sess.mintRef(ctx.tab.tab, node.nodeId, path || undefined)
+        const ref = ctx.sess.mintRef(ctx.tab.tab, node.nodeId, path || undefined, tag.toUpperCase())
         ctx.refs.push(ref)
         ctx.out.push(line)
         ctx.chars += line.length + 1
