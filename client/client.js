@@ -38,7 +38,7 @@ window.__ModuleLoader__.load({
     const DICT = {
       zh: {
         'group.main': '连接', 'group.advanced': '高级',
-        'f.endpoint': 'CDP 端点', 'f.token': 'Token', 'f.tokenFile': 'Token 文件',
+        'f.endpoint': 'CDP 端点', 'f.token': '密钥', 'f.tokenFile': '密钥文件',
         'f.requestTimeoutMs': '请求超时 (ms)', 'f.keepaliveMs': '心跳间隔 (ms)',
         'f.maxSessions': '最大会话数', 'f.idleEvictMs': '空闲回收 (ms)',
         'f.screenshotDir': '截图/PDF 目录', 'f.debugLog': '诊断日志',
