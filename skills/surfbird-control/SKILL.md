@@ -27,6 +27,8 @@ You control a real Kitesurf browser engine through `surfbird_*` tools. Each agen
 
 ## Finding text
 
+Use `surfbird_find` to check whether specific text appears on the page, count occurrences, or step through matches — it searches only text **already rendered** on the current page. To run the site's own search (query its backend for new results), drive the search form instead: `surfbird_fill` the field, submit (`surfbird_press_key` enter / click the button / `requestSubmit()`), `surfbird_wait` for results, then use `surfbird_find`/`snapshot` on the results page.
+
 `surfbird_find text=…` scans visible text (skips script/style/hidden subtrees), scrolls the match into view and returns `{count, index, snippet}` — the snippet is ±80 chars of context. `action=next|prev` walks matches; state persists per document and resets on navigation. `action=count` returns only the total; `clear` resets. `caseSensitive`/`wholeWord` flags supported. There is **no visual highlight** — follow up with `surfbird_screenshot` to see the scrolled position or `surfbird_extract`/`evaluate` for surrounding content.
 
 ## Waiting

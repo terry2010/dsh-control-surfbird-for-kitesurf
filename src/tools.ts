@@ -507,7 +507,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'surfbird_find',
-    description: 'Find text in the page like Ctrl+F. Counts matches, scrolls the current one into view and returns a context snippet — no visual highlight. action=first|next|prev walks matches (state persists per document), count returns the total only, clear resets. Combine with surfbird_screenshot or surfbird_extract for content.',
+    description: 'In-page text search (like Ctrl+F) over visible text — skips script/style/hidden subtrees. Use to check whether specific text appears on the page, count occurrences, or step through matches: returns {count,index,snippet} and scrolls the match into view (no visual highlight — pair with surfbird_screenshot or surfbird_extract). action=first|next|prev walks matches (state persists per document), count returns total only, clear resets; caseSensitive/wholeWord flags. Searches only text already rendered on the current page — it does NOT submit the site\'s own search form (use surfbird_fill + surfbird_press_key enter for that).',
     parameters: {
       text: REQ_S('Text to find.'),
       action: { type: 'string', enum: ['first', 'next', 'prev', 'count', 'clear'], description: "Default 'first'." },
