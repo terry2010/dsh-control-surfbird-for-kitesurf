@@ -201,11 +201,21 @@ function visit(ctx: Ctx, node: DomNode, segs: PathSeg[], insideSkippable: boolea
       const role = roleOf(node, tag, at)
       const href = tag === 'a' ? at.get('href') : undefined
       const path = cssPath(segs)
-      const ref = ctx.sess.mintRef(ctx.tab.tab, node.nodeId, path || undefined)
-      ctx.refs.push(ref)
       const label = name ? ` "${name}"` : ''
       const arrow = href ? ` → ${href.slice(0, 200)}` : ''
-      emit(ctx, `[e${ref.id}] ${role}${label}${arrow}`)
+      // 预算预检通过才 mint——被截断的元素不占 ref 位（模型看不到的 eN 没有意义）
+      const rid = ctx.sess.peekRefId()
+      const line = `[e${rid}] ${role}${label}${arrow}`
+      ctx.candidates += 1
+      if (ctx.emitted >= ctx.maxNodes || ctx.chars + line.length + 1 > ctx.maxChars) {
+        ctx.truncated = true
+      } else {
+        const ref = ctx.sess.mintRef(ctx.tab.tab, node.nodeId, path || undefined)
+        ctx.refs.push(ref)
+        ctx.out.push(line)
+        ctx.chars += line.length + 1
+        ctx.emitted += 1
+      }
       childSkippable = true
     }
   }

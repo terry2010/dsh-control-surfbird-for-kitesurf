@@ -61,6 +61,8 @@ export interface ToolsDeps {
   requestTimeoutMs: number
   attachments?: AttachmentStore
   outputDir?: string
+  /** 配置诊断（status 用；不回显 token）。 */
+  configInfo?: () => { configSource: string; endpoint: string; tokenSet: boolean }
   /** 状态上报回调（client toast 用）。 */
   onSessionError?: (key: string, err: unknown) => void
 }
@@ -147,8 +149,13 @@ const TOOLS: ToolDef[] = [
       const tabs = await sess.listTabs()
       const info = sess.browserInfo()
       const ver = info?.version ?? {}
+      const cfg = activeDeps?.configInfo?.()
       return ok({
         connected: info?.isConnected ?? false,
+        configSource: cfg?.configSource,
+        endpoint: cfg?.endpoint,
+        tokenSet: cfg?.tokenSet,
+        configured: cfg ? !!cfg.endpoint : undefined,
         product: strOrUndef(ver.product),
         protocolVersion: strOrUndef(ver['protocol-version'] ?? ver.protocolVersion),
         webSocketDebuggerUrl: strOrUndef(ver.webSocketDebuggerUrl),
@@ -171,11 +178,20 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'surfbird_new_tab',
-    description: 'Open a new tab (becomes current). If url is given, navigates immediately — createTarget alone does not navigate. Returns the new tab id.',
-    parameters: { url: S('Optional URL to navigate to right after creating the tab.') },
-    run: async (sess, args) => {
-      const tab = await sess.newTab(strArg(args.url))
-      return ok({ tab: publicTab(tab) })
+    description: 'Open a new tab (becomes current). If url is given, navigates immediately — createTarget alone does not navigate. wait=\'load\' (default when url given) blocks until load; use \'none\' to return immediately. Returns the new tab id.',
+    parameters: {
+      url: S('Optional URL to navigate to right after creating the tab.'),
+      wait: { type: 'string', enum: ['load', 'domcontentloaded', 'none'], description: "Wait after navigating (only with url). Default 'load'." },
+      timeoutMs: TIMEOUT,
+    },
+    run: async (sess, args, exec) => {
+      const url = strArg(args.url)
+      const tab = await sess.newTab(url)
+      const wait = strArg(args.wait) ?? (url ? 'load' : 'none')
+      if (url && wait !== 'none') {
+        await waitFor(sess, { tabId: tab.targetId, state: wait as WaitState, timeoutMs: numArg(args.timeoutMs), signal: exec.signal })
+      }
+      return ok({ tab: publicTab(tab), waited: url ? wait : undefined })
     },
   },
   {
@@ -210,7 +226,13 @@ const TOOLS: ToolDef[] = [
       timeoutMs: TIMEOUT,
     },
     run: async (sess, args, exec) => {
-      const res = await sess.navigate(String(args.url), strArg(args.tabId))
+      const url = String(args.url)
+      let protocol = ''
+      try { protocol = new URL(url).protocol } catch { /* relative/about: 交给引擎 */ }
+      if (protocol && !['http:', 'https:', 'about:', 'data:'].includes(protocol)) {
+        throw new SurfbirdError('cdp_error', `unsupported URL scheme: ${protocol} (allowed: http/https/about/data)`)
+      }
+      const res = await sess.navigate(url, strArg(args.tabId))
       const wait = strArg(args.wait) ?? 'load'
       if (wait !== 'none') {
         await waitFor(sess, { tabId: strArg(args.tabId), state: wait as WaitState, timeoutMs: numArg(args.timeoutMs), signal: exec.signal })

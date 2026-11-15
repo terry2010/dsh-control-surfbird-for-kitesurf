@@ -165,6 +165,10 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
     get requestTimeoutMs() { return resolved().requestTimeoutMs },
     get attachments() { return attachments },
     get outputDir() { return resolved().screenshotDir },
+    configInfo: () => {
+      const c = resolved()
+      return { configSource: c.configSource, endpoint: c.endpoint, tokenSet: !!c.token }
+    },
     onSessionError: (_key: string, err: unknown) => {
       if (resolved().debugLog) logDebug(`session error: ${err instanceof Error ? err.message : String(err)}`)
     },

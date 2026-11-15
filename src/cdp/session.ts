@@ -297,6 +297,11 @@ export class SessionBrowser {
     return `${tab.targetId}#${this.navSeq.get(tab.targetId) ?? 0}`
   }
 
+  /** 下一个 ref id（snapshot 预算预检用——mint 前估算行宽）。 */
+  peekRefId(): number {
+    return this.nextRefId
+  }
+
   mintRef(tab: TabInfo, nodeId: number, selector?: string): RefEntry {
     const id = this.nextRefId++
     const ref: RefEntry = { id, tabId: tab.targetId, nodeId, docToken: this.docToken(tab) }
