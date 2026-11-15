@@ -25,6 +25,12 @@ import {
   type TabInfo,
 } from './types.ts'
 
+/** evaluate 异常描述只留首行（真实错误信息），丢弃 wasm/JS 引擎栈帧——模型不需要且费 token。 */
+function evalErrorText(desc: string): string {
+  const first = desc.split('\n', 1)[0] ?? desc
+  return first.length > 500 ? `${first.slice(0, 500)}…` : first
+}
+
 export interface SessionOptions extends BrowserOptions {
   /** CDP 端点（http(s) base 或 ws(s):// 全 URL）。 */
   endpoint?: string
@@ -201,11 +207,11 @@ export class SessionBrowser {
     if (details) {
       const exc = (details.exception ?? {}) as JsonObject
       const desc = String(exc.description ?? details.text ?? 'evaluation error')
-      throw new SurfbirdError('cdp_error', desc)
+      throw new SurfbirdError('cdp_error', evalErrorText(desc))
     }
     const result = (res.result ?? {}) as JsonObject
     if (result.subtype === 'error') {
-      throw new SurfbirdError('cdp_error', String(result.description ?? 'evaluation error'))
+      throw new SurfbirdError('cdp_error', evalErrorText(String(result.description ?? 'evaluation error')))
     }
     return (result.value as Json | undefined) ?? null
   }

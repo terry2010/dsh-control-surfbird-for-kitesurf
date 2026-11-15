@@ -544,17 +544,20 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'surfbird_links',
-    description: 'Extract all links on the page as {url,text} pairs (absolute URLs, textContent trimmed to 160 chars, deduplicated by URL). selector scopes extraction to a subtree; limit caps results (default 200). Cheaper than evaluate for "what links are here" questions.',
+    description: 'Extract all links on the page as {url,text} pairs (absolute URLs, textContent trimmed to 160 chars). Dedupe is by full URL including #hash by default — pass dedupe=\'base\' to ignore fragments (e.g. many in-page anchors to the same document). selector scopes extraction to a subtree; limit caps results (default 200). Cheaper than evaluate for "what links are here" questions.',
     parameters: {
       tabId: TAB_ID,
       selector: S('Scope to links inside this CSS selector subtree.'),
       limit: SN('Max links to return (default 200, cap 500).'),
+      dedupe: { type: 'string', enum: ['url', 'base'], description: "Dedup key: 'url' = full href incl. hash (default); 'base' = strip #fragment first." },
     },
     run: async (sess, args, exec) => {
       const r = await sess.resolveTab(strArg(args.tabId))
+      const dedupe = strArg(args.dedupe)
       const value = await sess.evaluate(r, buildLinksExpression({
         selector: strArg(args.selector),
         limit: numArg(args.limit),
+        dedupe: dedupe === 'base' ? 'base' : 'url',
       }), { returnByValue: true, signal: exec.signal })
       return ok(value as JsonValue)
     },

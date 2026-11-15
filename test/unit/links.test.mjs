@@ -26,3 +26,10 @@ test('no-selector scope is the whole document', () => {
   const src = buildLinksExpression()
   assert.ok(src.includes('var scope=document;'))
 })
+
+test('dedupe=base strips #fragment before dedup key', () => {
+  const src = buildLinksExpression({ dedupe: 'base' })
+  assert.ok(src.includes("var key=u.split('#')[0];"))
+  const def = buildLinksExpression()
+  assert.ok(def.includes('var key=u;'))
+})

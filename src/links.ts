@@ -11,12 +11,15 @@ export interface LinksOptions {
   selector?: string
   /** 返回条数上限（默认 200，引擎侧也截断）。 */
   limit?: number
+  /** 去重粒度：'url' 按完整 href 含 hash（默认）；'base' 先剥 #fragment 再去重。 */
+  dedupe?: 'url' | 'base'
 }
 
 const MAX_LIMIT = 500
 
 export function buildLinksExpression(opts: LinksOptions = {}): string {
   const limit = Math.max(1, Math.min(MAX_LIMIT, Math.floor(opts.limit ?? 200)))
+  const dedupeBase = opts.dedupe === 'base'
   const scopeExpr = opts.selector
     ? `(document.querySelector(${JSON.stringify(opts.selector)})||null)`
     : 'document'
@@ -31,8 +34,9 @@ export function buildLinksExpression(opts: LinksOptions = {}): string {
   for(var i=0;i<els.length&&out.length<${limit};i++){
     var a=els[i],u='';
     try{u=a.href||'';}catch(_){continue;}
-    if(!u||seen[u])continue;
-    seen[u]=1;
+    var key=${dedupeBase ? "u.split('#')[0]" : 'u'};
+    if(!key||seen[key])continue;
+    seen[key]=1;
     var t='';
     try{t=(a.textContent||'').replace(/\\s+/g,' ').trim();}catch(_){}
     out.push({url:u,text:t.slice(0,160)});
