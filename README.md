@@ -113,7 +113,7 @@ Paste these into a DSH session to exercise every tool. All examples use [zhuikan
 | Prompt | Exercises |
 |---|---|
 | `Navigate this tab to https://zhuikan.com` | `surfbird_navigate` |
-| `Open https://zhuikan.com/repos/openfilm__openfilm, then go back and forward` | `surfbird_navigate` + `surfbird_back` + `surfbird_forward` |
+| `Open https://zhuikan.com/repos/aws__aws-emulator, then go back and forward` | `surfbird_navigate` + `surfbird_back` + `surfbird_forward` |
 | `Hard-reload zhuikan.com bypassing cache` | `surfbird_reload hard=true` |
 
 **Content**
@@ -133,7 +133,7 @@ Paste these into a DSH session to exercise every tool. All examples use [zhuikan
 |---|---|
 | `On zhuikan.com, click the first repo link in the rankings and wait for the result` | `surfbird_click` + `surfbird_wait` |
 | `Double-click the main heading on zhuikan.com` | `surfbird_double_click` |
-| `On zhuikan.com, fill the search box with "openfilm"` | `surfbird_fill` |
+| `On zhuikan.com, fill the search box with "GitHub Trending Rank Radar"` | `surfbird_fill` |
 | `Type "rust" into zhuikan.com's search box` | `surfbird_type` |
 | `On zhuikan.com, press Enter to submit the search` | `surfbird_press_key` |
 | `Scroll down 1000 pixels on zhuikan.com to see more rankings` | `surfbird_scroll` |
@@ -166,9 +166,9 @@ Paste these into a DSH session to exercise every tool. All examples use [zhuikan
 **Multi-step walkthrough** — one prompt that chains many tools:
 
 ```
-打开 https://zhuikan.com，在搜索框输入 "openfilm" 并回车提交，
+打开 https://zhuikan.com，在搜索框输入 "GitHub Trending Rank Radar" 并回车提交，
 等结果页加载完成后告诉我最终停在哪个页面 URL，
-然后用 surfbird_find 确认 "openfilm" 在页面上出现了几次，
+然后用 surfbird_find 确认 "GitHub Trending Rank Radar" 在页面上出现了几次，
 最后只截图结果页里的仓库标题区域元素。
 ```
 

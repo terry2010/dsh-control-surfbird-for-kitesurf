@@ -113,7 +113,7 @@ surfbird_screenshot                → 截图验证（内联图片）
 | 提示词 | 验证 |
 |---|---|
 | `把当前标签页导航到 https://zhuikan.com` | `surfbird_navigate` |
-| `打开 https://zhuikan.com/repos/openfilm__openfilm，然后后退再前进` | `surfbird_navigate` + `surfbird_back` + `surfbird_forward` |
+| `打开 https://zhuikan.com/repos/aws__aws-emulator，然后后退再前进` | `surfbird_navigate` + `surfbird_back` + `surfbird_forward` |
 | `绕过缓存硬刷新 zhuikan.com` | `surfbird_reload hard=true` |
 
 **内容**
@@ -133,7 +133,7 @@ surfbird_screenshot                → 截图验证（内联图片）
 |---|---|
 | `在 zhuikan.com 点击榜单里第一个仓库链接并等结果` | `surfbird_click` + `surfbird_wait` |
 | `双击 zhuikan.com 的主标题` | `surfbird_double_click` |
-| `在 zhuikan.com 的搜索框填入 "openfilm"` | `surfbird_fill` |
+| `在 zhuikan.com 的搜索框填入 "GitHub Trending Rank Radar"` | `surfbird_fill` |
 | `向 zhuikan.com 的搜索框输入 "rust"` | `surfbird_type` |
 | `在 zhuikan.com 按回车提交搜索` | `surfbird_press_key` |
 | `在 zhuikan.com 向下滚动 1000 像素看更多榜单` | `surfbird_scroll` |
@@ -166,9 +166,9 @@ surfbird_screenshot                → 截图验证（内联图片）
 **多步实战**——一条提示词串起多个工具：
 
 ```
-打开 https://zhuikan.com，在搜索框输入 "openfilm" 并回车提交，
+打开 https://zhuikan.com，在搜索框输入 "GitHub Trending Rank Radar" 并回车提交，
 等结果页加载完成后告诉我最终停在哪个页面 URL，
-然后用 surfbird_find 确认 "openfilm" 在页面上出现了几次，
+然后用 surfbird_find 确认 "GitHub Trending Rank Radar" 在页面上出现了几次，
 最后只截图结果页里的仓库标题区域元素。
 ```
 
