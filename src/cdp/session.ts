@@ -15,6 +15,7 @@
 
 import { KitesurfBrowser, type BrowserOptions } from './browser.ts'
 import { newTabBuffers, wireEventBuffers, type TabBuffers } from './events.ts'
+import { WebMcpTracker, type WebMcpTool } from './webmcp.ts'
 import {
   BrowserResetError,
   SurfbirdError,
@@ -47,6 +48,7 @@ export class SessionBrowser {
   private refs = new Map<number, RefEntry>()
   private nextRefId = 1
   private buffers = new Map<string, TabBuffers>()
+  private webmcp = new WebMcpTracker()
   private unwire: (() => void) | undefined
   /** 重连后置真：下一次 tab 解析失败报 browser_reset（retryable）而非 bad_tab_id。 */
   private justReset = false
@@ -94,6 +96,7 @@ export class SessionBrowser {
       this.buffers.clear()
       this.refs.clear()
       this.navSeq.clear()
+      this.webmcp.reset()
       this.justReset = true
     }
     return b
@@ -112,7 +115,17 @@ export class SessionBrowser {
     // detach/destroy → 清该 sessionId 的缓冲与 navSeq
     b.transport.on('Target.detachedFromTarget', (ev) => {
       const sid = String(ev.params?.sessionId ?? '')
-      if (sid) this.buffers.delete(sid)
+      if (sid) {
+        this.buffers.delete(sid)
+        this.webmcp.drop(sid)
+      }
+    })
+    // WebMCP 工具增量事件 → per-sessionId 记账（invoke 需要 frameId）
+    b.transport.on('WebMCP.toolsAdded', (ev) => {
+      this.webmcp.onToolsAdded(ev.sessionId ?? '', ev.params?.tools)
+    })
+    b.transport.on('WebMCP.toolsRemoved', (ev) => {
+      this.webmcp.onToolsRemoved(ev.sessionId ?? '', ev.params?.tools)
     })
     b.transport.on('Target.targetDestroyed', (ev) => {
       const tid = String(ev.params?.targetId ?? '')
@@ -370,6 +383,127 @@ export class SessionBrowser {
     return this.buffers.get(sessionId)
   }
 
+  // ---------- WebMCP（页面自注册工具） ----------
+
+  /**
+   * 确保该 session 已 WebMCP.enable；首次 enable 后等初始 toolsAdded 落定
+   * （引擎在 enable 响应后异步发增量事件——静默 250ms 收尾，上限 1500ms；
+   * 无工具页面也会等到上限，一次性代价）。
+   */
+  private async webmcpEnsure(sessionId: string, signal?: AbortSignal): Promise<void> {
+    if (this.webmcp.isEnabled(sessionId)) return
+    await this.cdp('WebMCP.enable', {}, { sessionId, signal })
+    this.webmcp.markEnabled(sessionId)
+    const b = this.browser
+    if (!b) return
+    const start = Date.now()
+    let seen = 0
+    let lastAt = 0
+    await new Promise<void>((resolve) => {
+      let done = false
+      const finish = () => {
+        if (done) return
+        done = true
+        clearInterval(tick)
+        unsub()
+        resolve()
+      }
+      const unsub = b.transport.on('WebMCP.toolsAdded', (ev) => {
+        if (ev.sessionId !== sessionId) return
+        seen += 1
+        lastAt = Date.now()
+      })
+      const tick = setInterval(() => {
+        if (signal?.aborted) return finish()
+        const quiet = seen > 0 && Date.now() - lastAt > 250
+        if (quiet || Date.now() - start > 1500) finish()
+      }, 50)
+      if (signal) {
+        if (signal.aborted) finish()
+        else signal.addEventListener('abort', finish, { once: true })
+      }
+    })
+  }
+
+  /** 当前 tab 页面注册的 WebMCP 工具列表（首次调用自动 enable+等初始事件）。 */
+  async webmcpList(r: ResolvedTab, signal?: AbortSignal): Promise<WebMcpTool[]> {
+    await this.webmcpEnsure(r.sessionId, signal)
+    return this.webmcp.list(r.sessionId)
+  }
+
+  /**
+   * 调用页面注册的 WebMCP 工具。invokeTool 立即返回 invocationId，结果异步
+   * 经 toolResponded 事件——订阅先于发送建立，杜绝竞态。
+   */
+  async webmcpInvoke(
+    r: ResolvedTab,
+    toolName: string,
+    input: JsonObject | undefined,
+    opts: { timeoutMs?: number; signal?: AbortSignal } = {},
+  ): Promise<JsonObject> {
+    await this.webmcpEnsure(r.sessionId, opts.signal)
+    const tool = this.webmcp.get(r.sessionId, toolName)
+    if (!tool) {
+      const avail = this.webmcp.list(r.sessionId).map((t) => t.name)
+      throw new SurfbirdError(
+        'cdp_error',
+        `unknown WebMCP tool: ${toolName}${avail.length ? ` (available: ${avail.join(', ')})` : ' — page registered no tools'}`,
+      )
+    }
+    const b = this.browser
+    if (!b) throw new SurfbirdError('browser_reset', 'browser disconnected')
+    const timeoutMs = opts.timeoutMs ?? 60_000
+    return await new Promise<JsonObject>((resolve, reject) => {
+      let invocationId = ''
+      let settled = false
+      const cleanup = () => {
+        clearTimeout(timer)
+        unsub()
+        opts.signal?.removeEventListener('abort', onAbort)
+      }
+      const settle = (fn: () => void) => {
+        if (settled) return
+        settled = true
+        cleanup()
+        fn()
+      }
+      const onAbort = () => settle(() => reject(new SurfbirdError('aborted', 'WebMCP invocation aborted')))
+      const timer = setTimeout(
+        () => settle(() => reject(new SurfbirdError('timeout', `WebMCP tool ${toolName} timed out after ${timeoutMs}ms`, { retryable: true }))),
+        timeoutMs,
+      )
+      // 先订阅再发送：toolResponded 可能紧随 invokeTool 响应到达
+      const unsub = b.transport.on('WebMCP.toolResponded', (ev) => {
+        if (ev.sessionId !== r.sessionId) return
+        const p = (ev.params ?? {}) as JsonObject
+        if (!invocationId || p.invocationId !== invocationId) return
+        settle(() =>
+          resolve({
+            invocationId,
+            status: String(p.status ?? ''),
+            output: p.output ?? null,
+            errorText: typeof p.errorText === 'string' ? p.errorText : undefined,
+          } as JsonObject),
+        )
+      })
+      if (opts.signal) {
+        if (opts.signal.aborted) return onAbort()
+        opts.signal.addEventListener('abort', onAbort, { once: true })
+      }
+      this.cdp('WebMCP.invokeTool', { frameId: tool.frameId, toolName, input: input ?? {} }, { sessionId: r.sessionId, signal: opts.signal })
+        .then((res) => {
+          invocationId = String(res.invocationId ?? '')
+          if (!invocationId) settle(() => reject(new SurfbirdError('cdp_error', 'WebMCP.invokeTool returned no invocationId')))
+        })
+        .catch((e) => settle(() => reject(e)))
+    })
+  }
+
+  /** 取消进行中的 WebMCP 调用（invocationId 来自 webmcpInvoke 的超时前手动取消场景）。 */
+  async webmcpCancel(r: ResolvedTab, invocationId: string, signal?: AbortSignal): Promise<void> {
+    await this.cdp('WebMCP.cancelInvocation', { invocationId }, { sessionId: r.sessionId, signal })
+  }
+
   /** 断开连接并清状态。 */
   async disconnect(): Promise<void> {
     this.unwire?.()
@@ -379,6 +513,7 @@ export class SessionBrowser {
     this.buffers.clear()
     this.refs.clear()
     this.navSeq.clear()
+    this.webmcp.reset()
     this.currentTabId = undefined
   }
 }

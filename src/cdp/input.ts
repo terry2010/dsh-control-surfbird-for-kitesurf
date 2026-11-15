@@ -188,6 +188,24 @@ export async function fill(sess: SessionBrowser, r: ResolvedTab, t: Target, valu
   return { method: 'dom', changed: ok, error: ok ? undefined : (err ?? 'fallback failed') }
 }
 
+/** nodeId → 文档坐标包围盒（captureScreenshot clip 用——rect 是视口相对，+scroll 得文档绝对坐标）。 */
+export async function elementRect(sess: SessionBrowser, r: ResolvedTab, nodeId: number, signal?: AbortSignal): Promise<{ x: number; y: number; width: number; height: number }> {
+  const objectId = await objectIdOf(sess, r, nodeId, signal)
+  if (!objectId) throw new SurfbirdError('ref_stale', 'element not resolvable — re-run surfbird_snapshot')
+  const out = await callOnElement(sess, r, objectId, `function(){
+    var e=this,r=e.getBoundingClientRect();
+    var sx=(typeof window.scrollX==='number')?window.scrollX:(window.pageXOffset||0);
+    var sy=(typeof window.scrollY==='number')?window.scrollY:(window.pageYOffset||0);
+    return {x:r.left+sx,y:r.top+sy,width:r.width,height:r.height};
+  }`, [], signal)
+  const o = (typeof out === 'object' && out !== null ? out : {}) as Record<string, unknown>
+  const x = Number(o.x), y = Number(o.y), w = Number(o.width), h = Number(o.height)
+  if (!Number.isFinite(x) || !Number.isFinite(y) || !Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) {
+    throw new SurfbirdError('element_not_visible', 'element has no visible box (hidden, zero-size, or not laid out)')
+  }
+  return { x, y, width: w, height: h }
+}
+
 /** type：聚焦元素后 insertText（不触发 keydown——Boa KeyboardEvent 不完整）。 */
 export async function typeText(sess: SessionBrowser, r: ResolvedTab, t: Target, text: string, signal?: AbortSignal): Promise<void> {
   const nodeId = await resolveNodeId(sess, r, t, signal)

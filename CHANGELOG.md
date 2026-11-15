@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `surfbird_webmcp` — WebMCP support: lists and invokes tools the page
+  registered via `document.modelContext` (`action=list|invoke|cancel`).
+  Per-session `WebMCP.enable` with toolsAdded/toolsRemoved tracking;
+  invoke waits on the async `toolResponded` event (60s default timeout).
+- `surfbird_links` — extract all page links as `{url,text}` pairs
+  (absolute URLs, URL-deduplicated, selector-scoped, capped).
+- `surfbird_screenshot` gains `target` (ref/selector) + `padding` —
+  clip the capture to a single element's document-space bounding box.
+- `surfbird_status` now returns `capabilities` — a machine-readable
+  engine feature matrix (webmcp/pdf/clip/waits/unsupported list).
+
 ## [0.3.0] - 2026-11-15
 
 ### Added

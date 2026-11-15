@@ -1,5 +1,5 @@
 /**
- * src/tools.ts — 26 个 surfbird_* 工具的 DSH 薄壳。
+ * src/tools.ts — 28 个 surfbird_* 工具的 DSH 薄壳。
  *
  * 约定：
  * - execute 返回 JsonValue；文本型工具返回 {ok:true,text,...meta}，
@@ -33,6 +33,7 @@ import { waitFor, type WaitState } from './cdp/wait.ts'
 import * as input from './cdp/input.ts'
 import { extract } from './cdp/extract.ts'
 import { buildFindExpression } from './find.ts'
+import { buildLinksExpression } from './links.ts'
 
 const S = (description: string): ParameterPropertySpec => ({ type: 'string', description })
 const SN = (description: string): ParameterPropertySpec => ({ type: 'number', description })
@@ -187,6 +188,7 @@ const TOOLS: ToolDef[] = [
         activeSessions: activeDeps?.registry.size() ?? 0,
         sessionAgeMs: info ? Date.now() - info.connectedAt : 0,
         sessionDeadlineInMs: info ? Math.max(0, info.sessionDeadline - Date.now()) : 0,
+        capabilities: ENGINE_CAPABILITIES,
       })
     },
   },
@@ -438,7 +440,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'surfbird_screenshot',
-    description: 'Capture the tab viewport (or fullPage via temporary viewport resize — engine has no captureBeyondViewport). Returns an image attachment for the user to view; text-only models get a placeholder, so use snapshot/extract/wait for self-verification. Writes to outputDir/tmp and returns a path when the attachments service is unavailable. Engine returns placeholder+error field on failure — the tool checks it. Dimensions clamp to engine limits (side ≤2560, ≤2560×1440 px).',
+    description: 'Capture the tab viewport, a page rect via clip, or a single element via target(ref/selector)+padding (or fullPage via temporary viewport resize — engine has no captureBeyondViewport). Returns an image attachment for the user to view; text-only models get a placeholder, so use snapshot/extract/wait for self-verification. Writes to outputDir/tmp and returns a path when the attachments service is unavailable. Engine returns placeholder+error field on failure — the tool checks it. Dimensions clamp to engine limits (side ≤2560, ≤2560×1440 px).',
     parameters: {
       tabId: TAB_ID,
       fullPage: SB('Resize viewport to full content size before capture (clamped to engine limits), then restore.'),
@@ -446,7 +448,7 @@ const TOOLS: ToolDef[] = [
       quality: SN('JPEG/WebP quality 0-100.'),
       clip: {
         type: 'object',
-        description: 'Capture only this page rect {x,y,width,height} (CSS pixels).',
+        description: 'Capture only this page rect {x,y,width,height} (CSS pixels, document-absolute).',
         properties: {
           x: REQ_N('Left edge (page coordinates).'),
           y: REQ_N('Top edge (page coordinates).'),
@@ -455,6 +457,16 @@ const TOOLS: ToolDef[] = [
         },
         additionalProperties: false,
       },
+      target: {
+        type: 'object',
+        description: 'Capture only this element — ref (eN from surfbird_snapshot) or selector. Computes the element\'s document-space bounding box and clips to it (mutually exclusive with clip; padding adds px around the box).',
+        properties: {
+          ref: SN('Element ref id from the latest surfbird_snapshot of this tab.'),
+          selector: S('CSS selector.'),
+        },
+        additionalProperties: false,
+      },
+      padding: SN('Extra pixels around a target element clip (default 0).'),
       waitFor: { type: 'string', enum: ['none', 'load', 'domcontentloaded', 'networkidle', 'stable'], description: "Wait for this state before capturing (default 'load'). Use 'networkidle' or 'stable' for SPA/async pages that keep mutating after load; 'none' captures immediately." },
       timeoutMs: TIMEOUT,
     },
@@ -528,6 +540,62 @@ const TOOLS: ToolDef[] = [
         wholeWord: boolArg(args.wholeWord),
       }), { returnByValue: true, signal: exec.signal })
       return ok(value as JsonValue)
+    },
+  },
+  {
+    name: 'surfbird_links',
+    description: 'Extract all links on the page as {url,text} pairs (absolute URLs, textContent trimmed to 160 chars, deduplicated by URL). selector scopes extraction to a subtree; limit caps results (default 200). Cheaper than evaluate for "what links are here" questions.',
+    parameters: {
+      tabId: TAB_ID,
+      selector: S('Scope to links inside this CSS selector subtree.'),
+      limit: SN('Max links to return (default 200, cap 500).'),
+    },
+    run: async (sess, args, exec) => {
+      const r = await sess.resolveTab(strArg(args.tabId))
+      const value = await sess.evaluate(r, buildLinksExpression({
+        selector: strArg(args.selector),
+        limit: numArg(args.limit),
+      }), { returnByValue: true, signal: exec.signal })
+      return ok(value as JsonValue)
+    },
+  },
+  {
+    name: 'surfbird_webmcp',
+    description: 'WebMCP: tools the PAGE registered about itself via document.modelContext (pages declare capabilities like "search"/"add-to-cart" instead of you guessing the DOM). action=list returns [{name,description,inputSchema,annotations}]; action=invoke calls one (input is a JSON object matching inputSchema) and waits for the result — status Completed/Error/Canceled with the tool\'s output; action=cancel aborts a pending invocation by invocationId. Most pages register nothing — empty list is normal. Requires Kitesurf engine (upstream kitesurf also supports it).',
+    parameters: {
+      action: { type: 'string', enum: ['list', 'invoke', 'cancel'], description: "Default 'list'." },
+      tool: S('Tool name (required for invoke).'),
+      input: { type: 'json', description: 'Input object for invoke, matching the tool\'s inputSchema.' },
+      invocationId: S('Invocation id (required for cancel).'),
+      tabId: TAB_ID,
+      timeoutMs: SN('Max wait for an invoke result in ms (default 60000).'),
+    },
+    run: async (sess, args, exec) => {
+      const r = await sess.resolveTab(strArg(args.tabId))
+      const action = strArg(args.action) ?? 'list'
+      if (action === 'list') {
+        const tools = await sess.webmcpList(r, exec.signal)
+        return ok({ tools: tools.map((t) => ({
+          name: t.name,
+          description: t.description,
+          inputSchema: t.inputSchema,
+          annotations: t.annotations,
+        })) as unknown as JsonValue, count: tools.length })
+      }
+      if (action === 'invoke') {
+        const tool = strArg(args.tool)
+        if (!tool) throw new SurfbirdError('bad_args', 'tool is required for action=invoke')
+        const input = isRecord(args.input) ? (args.input as JsonObject) : undefined
+        const res = await sess.webmcpInvoke(r, tool, input, { timeoutMs: numArg(args.timeoutMs), signal: exec.signal })
+        return ok(res as unknown as JsonValue)
+      }
+      if (action === 'cancel') {
+        const invocationId = strArg(args.invocationId)
+        if (!invocationId) throw new SurfbirdError('bad_args', 'invocationId is required for action=cancel')
+        await sess.webmcpCancel(r, invocationId, exec.signal)
+        return ok({ canceled: invocationId })
+      }
+      throw new SurfbirdError('bad_args', `invalid action: ${action}`)
     },
   },
   {
@@ -606,6 +674,16 @@ function strOrUndef(v: unknown): string | undefined {
   return typeof v === 'string' ? v : undefined
 }
 
+/** Kitesurf 引擎能力矩阵（design.md §8 边界的机器可读版）——status 直出，模型自适应。 */
+const ENGINE_CAPABILITIES: JsonObject = {
+  webmcp: true,
+  pdf: true,
+  screenshot: { clip: true, elementTarget: true, fullPage: 'viewport-resize', maxSide: 2560, maxPixels: 2560 * 1440 },
+  input: { mouse: true, keyboard: 'partial', insertText: true, setControlValue: true },
+  waits: ['load', 'domcontentloaded', 'url', 'text', 'text_gone', 'visible', 'hidden', 'enabled', 'networkidle', 'stable'],
+  unsupported: ['dialogs', 'fileUpload', 'fileDownload', 'clipboard', 'drag', 'touch'],
+}
+
 function publicTab(t: { targetId: string; url: string; title: string; type?: string; sessionId?: string }): JsonObject {
   return { tabId: t.targetId, url: t.url, title: t.title, type: t.type ?? 'page', attached: !!t.sessionId }
 }
@@ -656,7 +734,22 @@ async function screenshot(sess: SessionBrowser, deps: ToolsDeps, args: Record<st
     const q = numArg(args.quality)
     if (q !== undefined) params.quality = Math.max(0, Math.min(100, Math.round(q)))
   }
-  const clip = clipArg(args.clip)
+  let clip = clipArg(args.clip)
+  const elTarget = targetArg(args.target)
+  if (elTarget && clip) throw new SurfbirdError('bad_args', 'target and clip are mutually exclusive')
+  if (elTarget) {
+    if (elTarget.x !== undefined || elTarget.y !== undefined) {
+      throw new SurfbirdError('bad_args', 'screenshot target requires ref or selector (coordinates unsupported)')
+    }
+    const nodeId = await input.resolveNodeId(sess, r, elTarget, exec.signal)
+    if (nodeId === undefined) throw new SurfbirdError('bad_args', 'screenshot target requires ref or selector')
+    const rect = await input.elementRect(sess, r, nodeId, exec.signal)
+    const pad = Math.max(0, numArg(args.padding) ?? 0)
+    const x = Math.max(0, rect.x - pad)
+    const y = Math.max(0, rect.y - pad)
+    const c = clampVp(rect.width + pad * 2, rect.height + pad * 2)
+    clip = { x, y, width: c.width, height: c.height }
+  }
   if (clip) params.clip = clip
 
   // fullPage：引擎无 captureBeyondViewport——临时把 viewport 拉伸到内容尺寸

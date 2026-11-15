@@ -5,7 +5,8 @@ import assert from 'node:assert/strict'
 import { SessionBrowser } from '../../src/cdp/session.ts'
 import { snapshot } from '../../src/cdp/snapshot.ts'
 import { waitFor } from '../../src/cdp/wait.ts'
-import { click, fill } from '../../src/cdp/input.ts'
+import { click, fill, elementRect } from '../../src/cdp/input.ts'
+import { buildLinksExpression } from '../../src/links.ts'
 
 const URL = process.env.SURFBIRD_URL ?? process.env.KITESURF_URL
 const TOKEN = process.env.SURFBIRD_TOKEN ?? process.env.KITESURF_TOKEN
@@ -116,5 +117,40 @@ test('live smoke: connect→navigate→snapshot→evaluate→screenshot', { time
   assert.ok(typeof shotClip.data === 'string' && shotClip.data.length > 100, 'clip data')
   assert.equal(shotClip.error, undefined, `clip error: ${shotClip.error}`)
 
-  console.log('SMOKE OK — tabs:', tabs.length, 'refs:', snap2.refs, 'fullPage:', `${clampW}x${clampH}`)
+  // elementRect：form 页 button#b 的文档坐标包围盒（screenshot target 同源路径）
+  const btnDoc = await sess.cdp('DOM.getDocument', { depth: -1 }, { sessionId: fr.sessionId })
+  const btnQ = await sess.cdp('DOM.querySelector',
+    { nodeId: (btnDoc.root ?? {}).nodeId, selector: '#b' }, { sessionId: fr.sessionId })
+  assert.ok(btnQ.nodeId > 0, 'button#b nodeId')
+  const rect = await elementRect(sess, fr, Number(btnQ.nodeId))
+  assert.ok(rect.width > 0 && rect.height > 0, `elementRect ${JSON.stringify(rect)}`)
+
+  // links 表达式（smoke 页有 /next 链接）
+  const linksVal = await sess.evaluate(fr, buildLinksExpression(), { returnByValue: true })
+  assert.ok(Array.isArray(linksVal?.links), 'links shape')
+  assert.ok(linksVal.links.some((l) => String(l.url).includes('/next')), `links: ${JSON.stringify(linksVal).slice(0, 200)}`)
+
+  // page-settle waits：页面已 settled，两者应快速返回
+  const t0 = Date.now()
+  await waitFor(sess, { state: 'networkidle', timeoutMs: 10000 })
+  await waitFor(sess, { state: 'stable', timeoutMs: 10000 })
+  assert.ok(Date.now() - t0 < 10000, 'networkidle+stable resolved')
+
+  // WebMCP：注入 registerTool → toolsAdded → invoke → toolResponded
+  await sess.evaluate(fr, `document.modelContext.registerTool({
+    name:'smokeEcho', description:'echo args back',
+    inputSchema:{type:'object',properties:{msg:{type:'string'}}},
+    execute: async (args)=>({content:[{type:'text',text:'echo:'+JSON.stringify(args)}]})
+  })`, { awaitPromise: true })
+  const tools = await sess.webmcpList(fr)
+  const echo = tools.find((t) => t.name === 'smokeEcho')
+  assert.ok(echo, `webmcp tools: ${tools.map((t) => t.name).join(',')}`)
+  const inv = await sess.webmcpInvoke(fr, 'smokeEcho', { msg: 'hi' }, { timeoutMs: 15000 })
+  assert.equal(inv.status, 'Completed', `invoke: ${JSON.stringify(inv)}`)
+  const outText = JSON.stringify(inv.output ?? '')
+  assert.ok(outText.includes('echo:'), `output: ${outText.slice(0, 200)}`)
+  // 未知工具 → cdp_error
+  await assert.rejects(() => sess.webmcpInvoke(fr, 'noSuchTool', {}, { timeoutMs: 5000 }), /unknown WebMCP tool/)
+
+  console.log('SMOKE OK — tabs:', tabs.length, 'refs:', snap2.refs, 'fullPage:', `${clampW}x${clampH}`, 'webmcp:', tools.length)
 })
