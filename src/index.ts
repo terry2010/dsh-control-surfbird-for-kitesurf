@@ -14,7 +14,8 @@
  * @module dsh-control-surfbird-for-kitesurf
  */
 
-import { appendFileSync, mkdirSync } from 'node:fs'
+import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
@@ -25,7 +26,7 @@ import type { SessionOptions } from './cdp/session.ts'
 import { registerSurfbirdTools } from './tools.ts'
 import { registerSurfbirdSkill } from './skill.ts'
 import { normalizeEndpoint } from './cdp/transport.ts'
-import { readTokenFile } from './tokenfile.ts'
+import { encryptToken, isEncryptedBlob, readTokenFile } from './tokenfile.ts'
 
 export const name = 'control-surfbird'
 
@@ -202,10 +203,72 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
   // 状态路由：client toast/设置页探活用；?probe=1 才真实请求 /json/version
   // webServer 服务可能缺失（headless profile）——inject 回调等到就注册
   let unregisterStatus: (() => void) | undefined
+  let unregisterImport: (() => void) | undefined
   try {
     ctx.inject(['webServer'], (webCtx) => {
       const webServer = webCtx.get('webServer') as { register?: (r: unknown) => () => void } | undefined
       if (!webServer?.register) return
+      const sendJson = (res: ServerResponse, body: unknown, status = 200) => {
+        res.writeHead(status, { 'content-type': 'application/json' })
+        res.end(JSON.stringify(body))
+      }
+      // tokenFile 导入：client 文件选择器读到的内容 POST 到这里——
+      // surfbird-v1: 密文原样存；明文用本机 UUID 加密后存 ~/.dsh/surfbird-token（0600）。
+      // x-surfbird-ui 自定义头挡跨站 simple-request CSRF（跨域带不了该头，会触发 preflight 被拒）。
+      // 注意：webServer 的 resource 路由只放行 GET/HEAD，POST 必须走 handler（裸 req/res）。
+      unregisterImport = webServer.register({
+        kind: 'exact',
+        path: '/plugins/control-surfbird/tokenfile',
+        handler: (req: IncomingMessage, res: ServerResponse) => {
+          if (req.method !== 'POST') {
+            res.writeHead(405, { allow: 'POST' })
+            res.end()
+            return
+          }
+          if (req.headers['x-surfbird-ui'] !== '1') {
+            sendJson(res, { ok: false, error: 'forbidden' }, 403)
+            return
+          }
+          let body = ''
+          let tooLarge = false
+          req.on('data', (chunk: Buffer) => {
+            if (tooLarge) return
+            body += chunk.toString('utf8')
+            if (body.length > 8192) {
+              tooLarge = true
+              sendJson(res, { ok: false, error: 'too large' }, 413)
+              req.destroy()
+            }
+          })
+          req.on('end', () => {
+            if (tooLarge) return
+            const content = body.trim()
+            if (!content) {
+              sendJson(res, { ok: false, error: 'empty' }, 400)
+              return
+            }
+            const dir = join(homedir(), '.dsh')
+            mkdirSync(dir, { recursive: true })
+            const file = join(dir, 'surfbird-token')
+            let encrypted = isEncryptedBlob(content)
+            if (!encrypted) {
+              try {
+                writeFileSync(file, encryptToken(content) + '\n', { mode: 0o600 })
+                encrypted = true
+              } catch {
+                // 本机无 machine id → 明文落盘（0600），返回 encrypted:false 让 UI 如实提示
+                writeFileSync(file, content + '\n', { mode: 0o600 })
+              }
+            } else {
+              writeFileSync(file, content + '\n', { mode: 0o600 })
+            }
+            sendJson(res, { ok: true, path: file, encrypted })
+          })
+          req.on('error', () => {
+            if (!res.headersSent) sendJson(res, { ok: false, error: 'read failed' }, 400)
+          })
+        },
+      })
       unregisterStatus = webServer.register({
         kind: 'exact',
         path: '/plugins/control-surfbird/status',
@@ -259,6 +322,7 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
   return () => {
     offDisposed?.()
     unregisterStatus?.()
+    unregisterImport?.()
     disposeTools()
     void registry.disposeAll()
   }

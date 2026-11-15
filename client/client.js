@@ -23,6 +23,7 @@ window.__ModuleLoader__.load({
     const ID = 'dsh-control-surfbird-for-kitesurf'   // 包名：slot key / locale / 模块 id
     const NS = 'control-surfbird'                    // configForms 命名空间 = cordis.patch.yml entry id
     const STATUS_URL = '/plugins/control-surfbird/status'
+    const TOKENFILE_URL = '/plugins/control-surfbird/tokenfile'
     const TOOL_NAMES = [
       'surfbird_status', 'surfbird_tabs', 'surfbird_new_tab', 'surfbird_close_tab',
       'surfbird_select_tab', 'surfbird_navigate', 'surfbird_back', 'surfbird_forward',
@@ -42,6 +43,8 @@ window.__ModuleLoader__.load({
         'hint.tokenFile': '明文或 surfbird-v1: 机器绑定密文（surfbird-token encrypt 生成）',
         'err.unreadable': '密钥文件读取失败', 'err.empty': '密钥文件为空',
         'err.no_machine_id': '无法识别本机标识', 'err.decrypt_failed': '密钥文件解密失败（可能是别的机器生成的）',
+        'browse': '选择文件…', 'import.enc': '已保存（机器绑定加密）', 'import.plain': '已保存（未加密）',
+        'import.fail': '导入失败', 'import.busy': '导入中…',
         'f.requestTimeoutMs': '请求超时 (ms)', 'f.keepaliveMs': '心跳间隔 (ms)',
         'f.maxSessions': '最大会话数', 'f.idleEvictMs': '空闲回收 (ms)',
         'f.screenshotDir': '截图/PDF 目录', 'f.debugLog': '诊断日志',
@@ -59,6 +62,8 @@ window.__ModuleLoader__.load({
         'hint.tokenFile': 'Plaintext or surfbird-v1: machine-bound ciphertext (surfbird-token encrypt)',
         'err.unreadable': 'token file unreadable', 'err.empty': 'token file is empty',
         'err.no_machine_id': 'machine id not detectable', 'err.decrypt_failed': 'token file decrypt failed (possibly created on another machine)',
+        'browse': 'Choose file…', 'import.enc': 'Saved (machine-bound encrypted)', 'import.plain': 'Saved (unencrypted)',
+        'import.fail': 'Import failed', 'import.busy': 'Importing…',
         'f.requestTimeoutMs': 'Request timeout (ms)', 'f.keepaliveMs': 'Keepalive (ms)',
         'f.maxSessions': 'Max sessions', 'f.idleEvictMs': 'Idle eviction (ms)',
         'f.screenshotDir': 'Screenshot/PDF dir', 'f.debugLog': 'Debug log',
@@ -150,7 +155,7 @@ window.__ModuleLoader__.load({
             border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)',
             background: 'var(--dsw-alias-bg-layer-2,#f5f5f5)' }
 
-      const control = (f, value, write) => {
+      const control = (f, value, write, extraStyle) => {
         if (f.type === 'bool') {
           const on = !!value
           return el('label', {
@@ -171,7 +176,7 @@ window.__ModuleLoader__.load({
           value: value ?? '', placeholder: f.placeholder ?? '',
           ...(f.type === 'num' ? { min: f.min } : {}),
           onChange: (e) => write(f.key, e.target.value === '' ? undefined : (f.type === 'num' ? Number(e.target.value) : e.target.value)),
-          style: inputStyle,
+          style: extraStyle ? { ...inputStyle, ...extraStyle } : inputStyle,
         }
         return P.Input ? el(P.Input, props) : el('input', props)
       }
@@ -187,18 +192,25 @@ window.__ModuleLoader__.load({
         }
         const ok = st?.reachable === true
         const color = st === null ? '#888' : ok ? '#1a7f37' : '#cf222e'
-        return el('div', {
-          style: { display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', fontSize: 12, color },
-        },
-          el('span', { style: { width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block' } }),
-          el('span', null, st === null ? t('status.unknown') : ok ? `${t('status.ok')}${st.product ? ` · ${st.product}` : ''}` : t('status.bad')),
-          st?.tokenFileError ? el('span', { style: { color: '#cf222e', fontSize: 11 } },
-            t(`err.${st.tokenFileError}`) === `err.${st.tokenFileError}` ? st.tokenFileError : t(`err.${st.tokenFileError}`)) : null,
-          el('button', {
-            onClick: test, disabled: busy,
-            style: { marginLeft: 'auto', fontSize: 12, padding: '2px 10px', borderRadius: 6,
-              border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)', background: 'transparent', cursor: 'pointer' },
-          }, busy ? t('testing') : t('test')))
+        // 失败原因：fetch 异常 > probeError > probeStatus > 泛化文案
+        const reason = !ok && st
+          ? (st.error ?? st.probeError ?? (st.probeStatus ? `HTTP ${st.probeStatus}` : null))
+          : null
+        return el('div', { style: { padding: '6px 0' } },
+          el('div', { style: { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color } },
+            el('span', { style: { width: 8, height: 8, borderRadius: '50%', background: color, display: 'inline-block' } }),
+            el('span', null, st === null ? t('status.unknown') : ok ? `${t('status.ok')}${st.product ? ` · ${st.product}` : ''}` : t('status.bad')),
+            st?.tokenFileError ? el('span', { style: { color: '#cf222e', fontSize: 11 } },
+              t(`err.${st.tokenFileError}`) === `err.${st.tokenFileError}` ? st.tokenFileError : t(`err.${st.tokenFileError}`)) : null,
+            el('button', {
+              onClick: test, disabled: busy,
+              style: { marginLeft: 'auto', fontSize: 12, padding: '2px 10px', borderRadius: 6,
+                border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)', background: 'transparent', cursor: 'pointer' },
+            }, busy ? t('testing') : t('test'))),
+          reason ? el('div', {
+            style: { fontSize: 11, color: '#cf222e', paddingTop: 2, wordBreak: 'break-all' },
+            title: String(reason),
+          }, String(reason).slice(0, 160)) : null)
       }
 
       return function ConfigPanel({ t: slotT } = {}) {
@@ -212,21 +224,91 @@ window.__ModuleLoader__.load({
         )
         const data = deepVol(cfg?.value ?? cfg ?? {})
         const [status, setStatus] = React.useState('')
+        // authMode: null=跟随配置推导（tokenFile 非空→file），否则用户显式选择
+        const [authMode, setAuthMode] = React.useState(null)
+        const [importNote, setImportNote] = React.useState(null) // {text, bad}
+        const mode = authMode ?? (data.tokenFile ? 'file' : 'token')
         const write = (path, value) => {
           try {
             handle.set(path, value)
             setStatus(t('saved'))
           } catch (e2) { setStatus(`${t('writeFail')}: ${String(e2).slice(0, 60)}`) }
         }
+        // 文件选择器 → 读内容 POST /tokenfile → host 加密落盘 ~/.dsh/surfbird-token
+        // → 回写 tokenFile 路径。密文原样存；明文由 host 用本机 UUID 加密。
+        const pickTokenFile = () => {
+          const inp = document.createElement('input')
+          inp.type = 'file'
+          inp.onchange = async () => {
+            const file = inp.files && inp.files[0]
+            if (!file) return
+            setImportNote({ text: t('import.busy'), bad: false })
+            try {
+              const res = await fetch(TOKENFILE_URL, {
+                method: 'POST',
+                headers: { 'content-type': 'text/plain', 'x-surfbird-ui': '1' },
+                body: await file.text(),
+              })
+              const j = await res.json().catch(() => ({}))
+              if (!res.ok || j.ok !== true) throw new Error(j.error || `HTTP ${res.status}`)
+              write('tokenFile', j.path)
+              setAuthMode('file')
+              setImportNote({ text: j.encrypted ? t('import.enc') : t('import.plain'), bad: false })
+            } catch (e) {
+              setImportNote({ text: `${t('import.fail')}: ${String(e?.message ?? e).slice(0, 80)}`, bad: true })
+            }
+          }
+          inp.click()
+        }
         const groups = {}
         for (const f of FIELDS) (groups[f.group] ??= []).push(f)
         const children = [
           el(StatusBanner, { key: 'banner', t }),
         ]
+        // 密钥/密钥文件 二选一 toggle：tokenFile 非空→file，否则 token；
+        // 切回 token 会清掉 tokenFile（tokenFile 优先级更高，不清则不生效）。
+        const segBtn = (modeKey, fieldKey) => el('button', {
+          key: modeKey,
+          onClick: () => {
+            setAuthMode(modeKey)
+            setImportNote(null)
+            if (modeKey === 'token') write('tokenFile', undefined)
+          },
+          style: {
+            flex: 1, fontSize: 12, padding: '5px 0', borderRadius: 6, cursor: 'pointer',
+            border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)',
+            background: mode === modeKey ? 'var(--dsw-alias-button-primary-fill,#4a6cf7)' : 'transparent',
+            color: mode === modeKey ? '#fff' : 'inherit',
+          },
+        }, t(`f.${fieldKey}`))
+        const browseBtn = el('button', {
+          onClick: pickTokenFile,
+          style: { fontSize: 12, padding: '3px 10px', borderRadius: 6, whiteSpace: 'nowrap', cursor: 'pointer',
+            border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)', background: 'transparent' },
+        }, t('browse'))
+        const authSection = (() => {
+          const tokenF = groups.main?.find((f) => f.key === 'token')
+          const fileF = groups.main?.find((f) => f.key === 'tokenFile')
+          if (!tokenF || !fileF) return null
+          return el('div', { key: 'auth', style: { padding: '4px 0' } },
+            el('div', { style: { display: 'flex', gap: 6, marginBottom: 2 } }, segBtn('token', 'token'), segBtn('file', 'tokenFile')),
+            mode === 'token'
+              ? el('div', { style: { padding: '4px 0' } }, control(tokenF, data.token, write))
+              : el('div', null,
+                  el('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } },
+                    control(fileF, data.tokenFile, write, { width: '100%', minWidth: 0, flex: 1 }), browseBtn),
+                  el('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-secondary,#888)', paddingTop: 2 } }, t('hint.tokenFile')),
+                  importNote ? el('div', {
+                    style: { fontSize: 11, paddingTop: 2, color: importNote.bad ? '#cf222e' : '#1a7f37' },
+                  }, importNote.text) : null))
+        })()
         for (const g of ['main', 'advanced']) {
           const items = groups[g] ?? []
           if (!items.length) continue
-          const fields = items.map((f) => row(t(`f.${f.key}`), control(f, data[f.key], write), f.hint ? t(`hint.${f.key}`) : undefined))
+          const skip = g === 'main' ? new Set(['token', 'tokenFile']) : new Set()
+          const fields = items.filter((f) => !skip.has(f.key))
+            .map((f) => row(t(`f.${f.key}`), control(f, data[f.key], write), f.hint ? t(`hint.${f.key}`) : undefined))
+          if (g === 'main' && authSection) fields.push(authSection)
           children.push(g === 'advanced'
             ? el('details', { key: g, style: { marginBottom: 12 } },
                 el('summary', { style: { cursor: 'pointer', fontWeight: 600, padding: '6px 0',
