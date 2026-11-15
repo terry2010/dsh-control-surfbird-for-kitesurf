@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.3.0] - 2026-11-15
 
 ### Added
 
@@ -21,6 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   selector re-resolve (with tag verification) before failing — same-page
   navigations that bump the document generation no longer kill refs that
   still point at the same element.
+- Screenshot lightbox gains zoom (wheel, 0.5x-8x anchored at viewport
+  centre, snaps back to fit) and pan (drag/scroll), double-click toggles
+  fit/100%.
+- Docs now distinguish in-page `surfbird_find` (searches rendered text)
+  from driving a site's own search form, and clarify that screenshot
+  images are for the user — text-only models get a placeholder and should
+  self-verify via snapshot/extract/wait.
 
 ### Fixed
 
