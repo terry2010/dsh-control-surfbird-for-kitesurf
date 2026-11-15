@@ -95,7 +95,7 @@ surfbird_screenshot                → 截图验证（内联图片）
 
 ## 测试提示词
 
-把下面这些提示词粘到 DSH 会话里即可逐个验证工具。大部分假设已有页面打开——从第一组开始。
+把下面这些提示词粘到 DSH 会话里即可逐个验证工具。示例统一使用 [zhuikan.com](https://zhuikan.com)（GitHub 趋势榜站，带搜索框和详情页）。从第一组开始。
 
 **会话与浏览器**
 
@@ -103,70 +103,81 @@ surfbird_screenshot                → 截图验证（内联图片）
 |---|---|
 | `检查 surfbird 连接状态` | `surfbird_status`（含 `capabilities`） |
 | `列出所有打开的标签页，告诉我当前是哪个` | `surfbird_tabs` |
-| `在新标签页打开 https://example.com` | `surfbird_new_tab` |
-| `打开 https://example.com，但不要等它加载完` | `surfbird_new_tab wait=none` |
+| `在新标签页打开 https://zhuikan.com` | `surfbird_new_tab` |
+| `打开 https://zhuikan.com，但不要等它加载完` | `surfbird_new_tab wait=none` |
 | `切换到另一个标签页，然后关掉当前这个` | `surfbird_select_tab` + `surfbird_close_tab` |
-| `用裸 CDP 获取页面布局指标` | `surfbird_cdp` |
+| `用裸 CDP 获取当前页面的布局指标` | `surfbird_cdp` |
 
 **导航**
 
 | 提示词 | 验证 |
 |---|---|
-| `把当前标签页导航到 https://www.wikipedia.org` | `surfbird_navigate` |
-| `后退，然后再前进` | `surfbird_back` + `surfbird_forward` |
-| `绕过缓存硬刷新页面` | `surfbird_reload hard=true` |
+| `把当前标签页导航到 https://zhuikan.com` | `surfbird_navigate` |
+| `打开 https://zhuikan.com/repos/openfilm__openfilm，然后后退再前进` | `surfbird_navigate` + `surfbird_back` + `surfbird_forward` |
+| `绕过缓存硬刷新 zhuikan.com` | `surfbird_reload hard=true` |
 
 **内容**
 
 | 提示词 | 验证 |
 |---|---|
-| `给我这页的语义快照` | `surfbird_snapshot` |
-| `改用无障碍树给我看` | `surfbird_ax` |
-| `把正文提取成 markdown` | `surfbird_extract` |
-| `这页里 "browser" 出现了几次？跳到第二个匹配处。` | `surfbird_find` |
-| `列出这页所有链接` | `surfbird_links` |
-| `看看这页有没有注册 WebMCP 工具` | `surfbird_webmcp action=list` |
+| `给我 zhuikan.com 的语义快照` | `surfbird_snapshot` |
+| `改用无障碍树给我看 zhuikan.com` | `surfbird_ax` |
+| `打开 zhuikan.com 的一个仓库详情页，把正文提取成 markdown` | `surfbird_extract` |
+| `zhuikan.com 页面上 "GitHub" 出现了几次？跳到第二个匹配处。` | `surfbird_find` |
+| `列出 zhuikan.com 所有链接` | `surfbird_links` |
+| `看看 zhuikan.com 有没有注册 WebMCP 工具` | `surfbird_webmcp action=list` |
 
-**交互**（需要有链接/按钮/表单的页面——如 example.com）
+**交互**（zhuikan.com 有搜索框、榜单 tab 和仓库链接）
 
 | 提示词 | 验证 |
 |---|---|
-| `点击 "Learn more" 链接并等结果` | `surfbird_click` + `surfbird_wait` |
-| `双击主标题` | `surfbird_double_click` |
-| `在搜索框填入 "test query"` | `surfbird_fill` |
-| `向当前焦点元素输入 "hello"` | `surfbird_type` |
-| `按回车键` | `surfbird_press_key` |
-| `向下滚动 1000 像素` | `surfbird_scroll` |
+| `在 zhuikan.com 点击榜单里第一个仓库链接并等结果` | `surfbird_click` + `surfbird_wait` |
+| `双击 zhuikan.com 的主标题` | `surfbird_double_click` |
+| `在 zhuikan.com 的搜索框填入 "openfilm"` | `surfbird_fill` |
+| `向 zhuikan.com 的搜索框输入 "rust"` | `surfbird_type` |
+| `在 zhuikan.com 按回车提交搜索` | `surfbird_press_key` |
+| `在 zhuikan.com 向下滚动 1000 像素看更多榜单` | `surfbird_scroll` |
 
 **等待与执行**
 
 | 提示词 | 验证 |
 |---|---|
-| `等页面文本出现 "Example"` | `surfbird_wait state=text` |
-| `等网络空闲后告诉我页面标题` | `surfbird_wait state=networkidle` + `surfbird_evaluate` |
-| `执行 document.title 和 window.location.href` | `surfbird_evaluate` |
+| `在 zhuikan.com 等页面文本出现 "GitHub"` | `surfbird_wait state=text` |
+| `等 zhuikan.com 网络空闲后告诉我页面标题` | `surfbird_wait state=networkidle` + `surfbird_evaluate` |
+| `在 zhuikan.com 执行 document.title 和 window.location.href` | `surfbird_evaluate` |
 
 **输出**
 
 | 提示词 | 验证 |
 |---|---|
-| `截一张视口截图` | `surfbird_screenshot` |
-| `只截头部那个元素`（先 snapshot 拿 ref） | `surfbird_screenshot target={ref}` |
-| `截整页图` | `surfbird_screenshot fullPage=true` |
-| `把这个页面导出成 PDF` | `surfbird_pdf` |
+| `截一张 zhuikan.com 视口截图` | `surfbird_screenshot` |
+| `只截 zhuikan.com 榜单区域的那个元素`（先 snapshot 拿 ref） | `surfbird_screenshot target={ref}` |
+| `截 zhuikan.com 整页图` | `surfbird_screenshot fullPage=true` |
+| `把 zhuikan.com 导出成 PDF` | `surfbird_pdf` |
 
 **诊断**
 
 | 提示词 | 验证 |
 |---|---|
-| `显示这页的 console 错误` | `surfbird_console only=errors` |
-| `列出这页发出的网络请求` | `surfbird_network` |
-| `取第一个请求的响应体` | `surfbird_network action=body` |
+| `显示 zhuikan.com 的 console 错误` | `surfbird_console only=errors` |
+| `列出 zhuikan.com 发出的网络请求` | `surfbird_network` |
+| `取 zhuikan.com 第一个请求的响应体` | `surfbird_network action=body` |
+
+**多步实战**——一条提示词串起多个工具：
+
+```
+打开 https://zhuikan.com，在搜索框输入 "openfilm" 并回车提交，
+等结果页加载完成后告诉我最终停在哪个页面 URL，
+然后用 surfbird_find 确认 "openfilm" 在页面上出现了几次，
+最后只截图结果页里的仓库标题区域元素。
+```
+
+预期链路：`navigate` → `snapshot`（找搜索框 ref）→ `fill` → `press_key enter` → `wait`（url/text/networkidle）→ `evaluate`/`snapshot` → `find` → `screenshot target=…`。这是真实工作流，一次跑通 ref 处理、受控输入事件、页面静置等待和元素截图。
 
 **WebMCP 调用**（需要页面注册了工具——先注入一个）
 
 ```
-打开 https://example.com，然后用 surfbird_evaluate 执行：
+打开 https://zhuikan.com，然后用 surfbird_evaluate 执行：
 document.modelContext.registerTool({name:'getTitle',description:'返回页面标题',
 execute:async()=>document.title})
 再调用 surfbird_webmcp action=list，然后 action=invoke tool=getTitle。

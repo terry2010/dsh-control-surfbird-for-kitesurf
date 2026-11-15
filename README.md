@@ -95,7 +95,7 @@ surfbird_screenshot                → visual verification (inline image)
 
 ## Test prompts
 
-Paste these into a DSH session to exercise every tool. Most assume a page is already open — start with the first block.
+Paste these into a DSH session to exercise every tool. All examples use [zhuikan.com](https://zhuikan.com) (a GitHub trending rank site with a search box and detail pages). Start with the first block.
 
 **Session & browser**
 
@@ -103,70 +103,81 @@ Paste these into a DSH session to exercise every tool. Most assume a page is alr
 |---|---|
 | `Check the surfbird connection status` | `surfbird_status` (incl. `capabilities`) |
 | `List all open tabs and tell me which is current` | `surfbird_tabs` |
-| `Open https://example.com in a new tab` | `surfbird_new_tab` |
-| `Open https://example.com but don't wait for it to load` | `surfbird_new_tab wait=none` |
+| `Open https://zhuikan.com in a new tab` | `surfbird_new_tab` |
+| `Open https://zhuikan.com but don't wait for it to load` | `surfbird_new_tab wait=none` |
 | `Switch to the other tab, then close this one` | `surfbird_select_tab` + `surfbird_close_tab` |
-| `Use raw CDP to get the page layout metrics` | `surfbird_cdp` |
+| `Use raw CDP to get the current page's layout metrics` | `surfbird_cdp` |
 
 **Navigation**
 
 | Prompt | Exercises |
 |---|---|
-| `Navigate this tab to https://www.wikipedia.org` | `surfbird_navigate` |
-| `Go back, then forward again` | `surfbird_back` + `surfbird_forward` |
-| `Hard-reload the page bypassing cache` | `surfbird_reload hard=true` |
+| `Navigate this tab to https://zhuikan.com` | `surfbird_navigate` |
+| `Open https://zhuikan.com/repos/openfilm__openfilm, then go back and forward` | `surfbird_navigate` + `surfbird_back` + `surfbird_forward` |
+| `Hard-reload zhuikan.com bypassing cache` | `surfbird_reload hard=true` |
 
 **Content**
 
 | Prompt | Exercises |
 |---|---|
-| `Give me a semantic snapshot of this page` | `surfbird_snapshot` |
-| `Show me the accessibility tree instead` | `surfbird_ax` |
-| `Extract the main article as markdown` | `surfbird_extract` |
-| `How many times does "browser" appear on this page? Jump to the second match.` | `surfbird_find` |
-| `List all the links on this page` | `surfbird_links` |
-| `Check whether this page registered any WebMCP tools` | `surfbird_webmcp action=list` |
+| `Give me a semantic snapshot of zhuikan.com` | `surfbird_snapshot` |
+| `Show me zhuikan.com's accessibility tree instead` | `surfbird_ax` |
+| `Open a repo detail page on zhuikan.com and extract the article as markdown` | `surfbird_extract` |
+| `How many times does "GitHub" appear on zhuikan.com? Jump to the second match.` | `surfbird_find` |
+| `List all the links on zhuikan.com` | `surfbird_links` |
+| `Check whether zhuikan.com registered any WebMCP tools` | `surfbird_webmcp action=list` |
 
-**Interaction** (on a page with a link/button/form — e.g. example.com)
+**Interaction** (zhuikan.com has a search box, board tabs and repo links)
 
 | Prompt | Exercises |
 |---|---|
-| `Click the "Learn more" link and wait for the result` | `surfbird_click` + `surfbird_wait` |
-| `Double-click the main heading` | `surfbird_double_click` |
-| `Fill the search box with "test query"` | `surfbird_fill` |
-| `Type "hello" into the focused field` | `surfbird_type` |
-| `Press Enter` | `surfbird_press_key` |
-| `Scroll down 1000 pixels` | `surfbird_scroll` |
+| `On zhuikan.com, click the first repo link in the rankings and wait for the result` | `surfbird_click` + `surfbird_wait` |
+| `Double-click the main heading on zhuikan.com` | `surfbird_double_click` |
+| `On zhuikan.com, fill the search box with "openfilm"` | `surfbird_fill` |
+| `Type "rust" into zhuikan.com's search box` | `surfbird_type` |
+| `On zhuikan.com, press Enter to submit the search` | `surfbird_press_key` |
+| `Scroll down 1000 pixels on zhuikan.com to see more rankings` | `surfbird_scroll` |
 
 **Wait & eval**
 
 | Prompt | Exercises |
 |---|---|
-| `Wait until the page text contains "Example"` | `surfbird_wait state=text` |
-| `Wait until the network goes idle, then tell me the title` | `surfbird_wait state=networkidle` + `surfbird_evaluate` |
-| `Evaluate document.title and window.location.href` | `surfbird_evaluate` |
+| `On zhuikan.com, wait until the page text contains "GitHub"` | `surfbird_wait state=text` |
+| `Wait for zhuikan.com's network to go idle, then tell me the page title` | `surfbird_wait state=networkidle` + `surfbird_evaluate` |
+| `Evaluate document.title and window.location.href on zhuikan.com` | `surfbird_evaluate` |
 
 **Output**
 
 | Prompt | Exercises |
 |---|---|
-| `Take a screenshot of the viewport` | `surfbird_screenshot` |
-| `Screenshot only the header element` (after snapshot gives a ref) | `surfbird_screenshot target={ref}` |
-| `Take a full-page screenshot` | `surfbird_screenshot fullPage=true` |
-| `Export this page as a PDF` | `surfbird_pdf` |
+| `Take a screenshot of zhuikan.com's viewport` | `surfbird_screenshot` |
+| `Screenshot only the rankings area element` (grab its ref from snapshot first) | `surfbird_screenshot target={ref}` |
+| `Take a full-page screenshot of zhuikan.com` | `surfbird_screenshot fullPage=true` |
+| `Export zhuikan.com as a PDF` | `surfbird_pdf` |
 
 **Diagnostics**
 
 | Prompt | Exercises |
 |---|---|
-| `Show me console errors from this page` | `surfbird_console only=errors` |
-| `List the network requests this page made` | `surfbird_network` |
-| `Get the response body of the first request` | `surfbird_network action=body` |
+| `Show me console errors from zhuikan.com` | `surfbird_console only=errors` |
+| `List the network requests zhuikan.com made` | `surfbird_network` |
+| `Get the response body of zhuikan.com's first request` | `surfbird_network action=body` |
+
+**Multi-step walkthrough** — one prompt that chains many tools:
+
+```
+打开 https://zhuikan.com，在搜索框输入 "openfilm" 并回车提交，
+等结果页加载完成后告诉我最终停在哪个页面 URL，
+然后用 surfbird_find 确认 "openfilm" 在页面上出现了几次，
+最后只截图结果页里的仓库标题区域元素。
+```
+
+Expected chain: `navigate` → `snapshot`(find searchbox ref) → `fill` → `press_key enter` → `wait`(url/text/networkidle) → `evaluate`/`snapshot` → `find` → `screenshot target=…`. This is the real-world flow that exercises ref handling, controlled-input events, page-settle waits and element screenshots in one go.
 
 **WebMCP invoke** (needs a page that registers tools — inject one first)
 
 ```
-Open https://example.com, then use surfbird_evaluate to run:
+Open https://zhuikan.com, then use surfbird_evaluate to run:
 document.modelContext.registerTool({name:'getTitle',description:'返回页面标题',
 execute:async()=>document.title})
 Then call surfbird_webmcp action=list, then action=invoke tool=getTitle.
