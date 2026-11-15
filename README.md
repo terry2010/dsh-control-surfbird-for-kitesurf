@@ -43,11 +43,13 @@ After install, open the plugin settings page (or wait for the setup toast) and c
 
 | Field | Description |
 |---|---|
-| `endpoint` | CDP endpoint, e.g. `http://127.0.0.1:8080` or `http://123.123.123.123:8787`. `http(s)://` URLs are normalized to the browser WebSocket automatically. An SSH tunnel (`ssh -L 18080:127.0.0.1:8080 host`) keeps the engine off the public internet. |
+| `endpoint` | CDP endpoint, e.g. `http://127.0.0.1:8787` or `http://123.123.123.123:8787`. `http(s)://` URLs are normalized to the browser WebSocket automatically. An SSH tunnel (`ssh -L 8787:127.0.0.1:8080 host`) keeps the engine off the public internet. |
 | `token` | Bearer token for surfbird auth mode. Prefer `tokenFile` to keep secrets out of the config file. |
 | `tokenFile` | Path to a token file — plaintext or `surfbird-v1:` machine-bound ciphertext (takes precedence over `token`). |
 
 Optional advanced fields: `requestTimeoutMs`, `keepaliveMs`, `maxSessions`, `idleEvictMs`, `screenshotDir`, `debugLog`.
+
+Port note: the raw engine and upstream Kitesurf `wrangler dev` listen on `:8787` by default; the surfbird `auth` proxy listens on `:8080` by default (`SURFBIRD_PORT` overrides it).
 
 Environment fallback for headless/CI: `SURFBIRD_URL`/`SURFBIRD_ENDPOINT`/`KITESURF_URL`/`KITESURF_ENDPOINT` for the endpoint, `SURFBIRD_TOKEN`/`KITESURF_TOKEN` for the token.
 
@@ -107,7 +109,7 @@ npm run build      # tsc → lib/
 npm test           # unit tests (no engine needed)
 npm run check      # plugin shape check
 npm run test:live  # live smoke — needs SURFBIRD_URL/TOKEN or:
-                   #   ssh -L 18080:127.0.0.1:8080 <surfbird-host>
+                   #   ssh -L 8787:127.0.0.1:8080 <surfbird-host>
 npm pack --dry-run
 ```
 
@@ -127,12 +129,16 @@ Three options, in precedence order: `tokenFile` (plaintext `chmod 600`, or `surf
 **What can't it do?**
 Anything the engine can't: JS dialogs, file upload/download, clipboard, drag/touch, real keyboard events, and anything requiring persistent state across connections. See *Engine limits* above — the SKILL.md repeats these boundaries for the model.
 
-**Can I use it outside DSH?**
-`src/cdp/` is deliberately DSH-free — copy the directory into an OpenCode or Pi plugin and you get the same browser core with a different tool wrapper.
-
 ## License
 
 [Apache-2.0](LICENSE)
+
+## Related projects
+
+- [surfbird](https://github.com/terry2010/surfbird) — self-hosted Docker distribution of Kitesurf with token auth, REST proxy and MCP server
+- [Kitesurf](https://github.com/cloudflare/kitesurf) — Cloudflare's experimental browser engine built for AI agents; runs on Workers and speaks CDP
+- [DeepSeek Harness (DSH)](https://www.deepseek.com/) — the agent harness this plugin extends
+- [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) — the protocol this plugin speaks
 
 ---
 
@@ -180,11 +186,13 @@ dsh plugin --profile <name> add dsh-control-surfbird-for-kitesurf
 
 | 字段 | 说明 |
 |---|---|
-| `endpoint` | CDP 端点，如 `http://127.0.0.1:8080` 或 `http://123.123.123.123:8787`。`http(s)://` 会自动归一化为浏览器 WebSocket。SSH 隧道（`ssh -L 18080:127.0.0.1:8080 host`）可避免把引擎暴露公网。 |
+| `endpoint` | CDP 端点，如 `http://127.0.0.1:8787` 或 `http://123.123.123.123:8787`。`http(s)://` 会自动归一化为浏览器 WebSocket。SSH 隧道（`ssh -L 8787:127.0.0.1:8080 host`）可避免把引擎暴露公网。 |
 | `token` | surfbird auth 模式的 Bearer token。建议优先用 `tokenFile`，避免密钥落配置文件。 |
 | `tokenFile` | 密钥文件路径——明文或 `surfbird-v1:` 机器绑定密文（优先级高于 `token`）。 |
 
 高级可选：`requestTimeoutMs`、`keepaliveMs`、`maxSessions`、`idleEvictMs`、`screenshotDir`、`debugLog`。
+
+端口说明：raw 引擎与上游 Kitesurf `wrangler dev` 默认监听 `:8787`；surfbird `auth` 代理默认监听 `:8080`（`SURFBIRD_PORT` 可改）。
 
 无头/CI 环境变量兜底：端点 `SURFBIRD_URL`/`SURFBIRD_ENDPOINT`/`KITESURF_URL`/`KITESURF_ENDPOINT`，密钥 `SURFBIRD_TOKEN`/`KITESURF_TOKEN`。
 
@@ -244,7 +252,7 @@ npm run build      # tsc → lib/
 npm test           # 单元测试（无需引擎）
 npm run check      # 插件形态检查
 npm run test:live  # live 冒烟——需要 SURFBIRD_URL/TOKEN 或：
-                   #   ssh -L 18080:127.0.0.1:8080 <surfbird-host>
+                   #   ssh -L 8787:127.0.0.1:8080 <surfbird-host>
 npm pack --dry-run
 ```
 
@@ -264,9 +272,13 @@ npm pack --dry-run
 **不能做什么？**
 引擎做不到的都不行：JS 弹窗、文件上传/下载、剪贴板、拖拽/触摸、真实键盘事件、跨连接持久状态。详见上文"引擎边界"——SKILL.md 也会把这些边界写给模型。
 
-**能在 DSH 之外用吗？**
-`src/cdp/` 刻意与 DSH 解耦——整目录复制进 OpenCode 或 Pi 插件即可获得同样的浏览器核心，只需换一层工具封装。
-
 ## 许可证
 
 [Apache-2.0](LICENSE)
+
+## 相关项目
+
+- [surfbird](https://github.com/terry2010/surfbird) —— Kitesurf 的自托管 Docker 发行版，含 token 认证、REST 代理和 MCP 服务
+- [Kitesurf](https://github.com/cloudflare/kitesurf) —— Cloudflare 的实验性浏览器引擎，为 AI agent 而生；跑在 Workers 上，讲 CDP
+- [DeepSeek Harness（DSH）](https://www.deepseek.com/) —— 本插件所扩展的 agent 运行时
+- [Chrome DevTools Protocol](https://chromedevtools.github.io/devtools-protocol/) —— 本插件使用的协议
