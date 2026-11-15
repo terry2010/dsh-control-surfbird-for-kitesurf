@@ -155,6 +155,56 @@ window.__ModuleLoader__.load({
             border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)',
             background: 'var(--dsw-alias-bg-layer-2,#f5f5f5)' }
 
+      // 受控输入 + config 回写存在竞态：每次击键都走 handle.set→snapshot→value prop，
+      // 快速输入时旧值会把 DOM 吃回去（实测连输数字出现字符错乱/变 0）。
+      // 改为本地 state 即时显示 + 400ms 防抖提交；外部写入（导入回写）经 lastWrite 比对同步。
+      function DebouncedInput({ f, value, write, extraStyle }) {
+        const [local, setLocal] = React.useState(value ?? '')
+        const timerRef = React.useRef(undefined)
+        const lastWrite = React.useRef(value)
+        React.useEffect(() => () => clearTimeout(timerRef.current), [])
+        React.useEffect(() => {
+          const ext = value ?? ''
+          if (String(ext) !== String(lastWrite.current ?? '')) {
+            lastWrite.current = ext
+            setLocal(ext)
+          }
+        }, [value])
+        const commit = (raw) => {
+          const v = typeof raw === 'string' ? raw : String(raw ?? '')
+          if (f.type === 'num') {
+            if (v === '') { lastWrite.current = undefined; write(f.key, undefined); return }
+            const n = Number(v)
+            if (Number.isNaN(n)) return
+            lastWrite.current = n
+            write(f.key, n)
+          } else {
+            const out = v === '' ? undefined : v
+            lastWrite.current = out
+            write(f.key, out)
+          }
+        }
+        const onChange = (e) => {
+          const v = typeof e === 'string' ? e : e?.target?.value
+          if (v === undefined) return
+          setLocal(v)
+          clearTimeout(timerRef.current)
+          timerRef.current = setTimeout(() => commit(v), 400)
+        }
+        const onBlur = (e) => {
+          clearTimeout(timerRef.current)
+          commit(typeof e === 'string' ? e : e?.target?.value ?? local)
+        }
+        const props = {
+          type: f.secret ? 'password' : (f.type === 'num' ? 'number' : 'text'),
+          value: local, placeholder: f.placeholder ?? '',
+          ...(f.type === 'num' ? { min: f.min } : {}),
+          onChange, onBlur,
+          style: extraStyle ? { ...inputStyle, ...extraStyle } : inputStyle,
+        }
+        return P.Input ? el(P.Input, props) : el('input', props)
+      }
+
       const control = (f, value, write, extraStyle) => {
         if (f.type === 'bool') {
           const on = !!value
@@ -171,14 +221,7 @@ window.__ModuleLoader__.load({
             el('span', { style: { position: 'absolute', left: on ? 16 : 2, top: 2, width: 14, height: 14,
               borderRadius: '50%', background: '#fff', boxShadow: '0 1px 2px rgba(0,0,0,.2)', transition: 'left .15s' } }))
         }
-        const props = {
-          type: f.secret ? 'password' : (f.type === 'num' ? 'number' : 'text'),
-          value: value ?? '', placeholder: f.placeholder ?? '',
-          ...(f.type === 'num' ? { min: f.min } : {}),
-          onChange: (e) => write(f.key, e.target.value === '' ? undefined : (f.type === 'num' ? Number(e.target.value) : e.target.value)),
-          style: extraStyle ? { ...inputStyle, ...extraStyle } : inputStyle,
-        }
-        return P.Input ? el(P.Input, props) : el('input', props)
+        return el(DebouncedInput, { f, value, write, extraStyle })
       }
 
       function StatusBanner({ t }) {
@@ -291,7 +334,7 @@ window.__ModuleLoader__.load({
           const fileF = groups.main?.find((f) => f.key === 'tokenFile')
           if (!tokenF || !fileF) return null
           return el('div', { key: 'auth', style: { padding: '4px 0' } },
-            el('div', { style: { display: 'flex', gap: 6, marginBottom: 2 } }, segBtn('token', 'token'), segBtn('file', 'tokenFile')),
+            el('div', { style: { display: 'flex', gap: 6, marginBottom: 2, maxWidth: 220 } }, segBtn('token', 'token'), segBtn('file', 'tokenFile')),
             mode === 'token'
               ? el('div', { style: { padding: '4px 0' } }, control(tokenF, data.token, write))
               : el('div', null,
