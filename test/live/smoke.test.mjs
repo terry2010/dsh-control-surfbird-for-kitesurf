@@ -82,5 +82,39 @@ test('live smoke: connect→navigate→snapshot→evaluate→screenshot', { time
   assert.ok(typeof pdf.data === 'string' && pdf.data.length > 100, 'pdf data')
   assert.equal(pdf.error, undefined, `pdf error: ${pdf.error}`)
 
-  console.log('SMOKE OK — tabs:', tabs.length, 'refs:', snap2.refs)
+  // pdf 全参数（paperWidth/preferCSSPageSize/margins/omitBackground）
+  const pdf2 = await sess.cdp('Page.printToPDF', {
+    paperWidth: 5, paperHeight: 7, landscape: true, preferCSSPageSize: false,
+    marginTop: 0.4, marginBottom: 0.4, marginLeft: 0.4, marginRight: 0.4,
+    printBackground: true, omitBackground: false,
+  }, { sessionId: fr.sessionId })
+  assert.ok(typeof pdf2.data === 'string' && pdf2.data.length > 100, 'pdf2 data')
+  assert.equal(pdf2.error, undefined, `pdf2 error: ${pdf2.error}`)
+
+  // fullPage 序列（tools.ts screenshot() 同款）：getLayoutMetrics → resize → capture → restore
+  const metrics = await sess.cdp('Page.getLayoutMetrics', {}, { sessionId: fr.sessionId })
+  const cs = metrics.cssContentSize ?? metrics.contentSize
+  const lv = metrics.cssLayoutViewport ?? metrics.layoutViewport
+  assert.ok(cs?.width > 0 && cs?.height > 0, `contentSize ${JSON.stringify(cs)}`)
+  const clampW = Math.min(2560, Math.floor(cs.width))
+  const clampH = Math.min(2560, Math.floor(cs.height))
+  await sess.cdp('Emulation.setDeviceMetricsOverride',
+    { width: clampW, height: clampH, deviceScaleFactor: 1, mobile: false }, { sessionId: fr.sessionId })
+  try {
+    const shotFull = await sess.cdp('Page.captureScreenshot', { format: 'png' }, { sessionId: fr.sessionId })
+    assert.ok(typeof shotFull.data === 'string' && shotFull.data.length > 1000, 'fullPage data')
+    assert.equal(shotFull.error, undefined, `fullPage error: ${shotFull.error}`)
+  } finally {
+    await sess.cdp('Emulation.setDeviceMetricsOverride',
+      { width: lv.clientWidth, height: lv.clientHeight, deviceScaleFactor: 1, mobile: false },
+      { sessionId: fr.sessionId })
+  }
+
+  // clip
+  const shotClip = await sess.cdp('Page.captureScreenshot',
+    { format: 'png', clip: { x: 0, y: 0, width: 200, height: 200 } }, { sessionId: fr.sessionId })
+  assert.ok(typeof shotClip.data === 'string' && shotClip.data.length > 100, 'clip data')
+  assert.equal(shotClip.error, undefined, `clip error: ${shotClip.error}`)
+
+  console.log('SMOKE OK — tabs:', tabs.length, 'refs:', snap2.refs, 'fullPage:', `${clampW}x${clampH}`)
 })

@@ -5,8 +5,9 @@
  * - execute 返回 JsonValue；文本型工具返回 {ok:true,text,...meta}，
  *   renderEnvelope 把 .text 直出为 text block（模型可读性优先于 JSON 转义）
  * - 成功 {ok:true, ...payload}；失败 {ok:false,error:{code,message,retryable}}
- * - 每个工具的 run 经 sess.enqueue 串行化（DSH 可并行派发，isConcurrencySafe
- *   不感知 session，互斥只能在 session 层做）
+ * - 每个工具的 run 经 sess.enqueue 串行化；同 session 调用严格按提交序执行，
+ *   跨 session 各自独立浏览器连接——故全部工具声明 isConcurrencySafe
+ *   （DSH 的分类器不感知 session，安全性由 session 互斥保证）
  * - exec.agent?.session.id 为 session key；无 agent → '__global__' 兜底
  * - exec.signal 透传到 CDP/等待
  */
@@ -415,21 +416,36 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'surfbird_screenshot',
-    description: 'Capture the tab viewport (or fullPage). Returns an image attachment when the attachments service is available; otherwise writes to outputDir/tmp and returns a path. Engine returns placeholder+error field on failure — the tool checks it. fullPage height is capped ~1440px by the engine.',
+    description: 'Capture the tab viewport (or fullPage via temporary viewport resize — engine has no captureBeyondViewport). Returns an image attachment when the attachments service is available; otherwise writes to outputDir/tmp and returns a path. Engine returns placeholder+error field on failure — the tool checks it. Dimensions clamp to engine limits (side ≤2560, ≤2560×1440 px).',
     parameters: {
       tabId: TAB_ID,
-      fullPage: SB('Capture beyond the viewport (engine caps height ~1440px).'),
+      fullPage: SB('Resize viewport to full content size before capture (clamped to engine limits), then restore.'),
       format: { type: 'string', enum: ['png', 'jpeg', 'webp'], description: "Image format (default png)." },
       quality: SN('JPEG/WebP quality 0-100.'),
+      clip: {
+        type: 'object',
+        description: 'Capture only this page rect {x,y,width,height} (CSS pixels).',
+        properties: {
+          x: REQ_N('Left edge (page coordinates).'),
+          y: REQ_N('Top edge (page coordinates).'),
+          width: REQ_N('Width in px (clamped to engine limits).'),
+          height: REQ_N('Height in px (clamped to engine limits).'),
+        },
+        additionalProperties: false,
+      },
     },
     run: async (sess, args, exec) => screenshot(sess, activeDeps!, args, exec),
   },
   {
     name: 'surfbird_pdf',
-    description: 'Print the tab to PDF (Page.printToPDF). Returns a file path — PDF is not an image attachment. Engine failures come back as {data, error} — checked.',
+    description: 'Print the tab to PDF (Page.printToPDF). Returns a file path — PDF is not an image attachment. Engine failures come back as {data, error} — checked. paperWidth/Height are inches; preferCSSPageSize honors the page\'s own @page size.',
     parameters: {
       tabId: TAB_ID,
       landscape: SB('Landscape orientation.'),
+      paperWidth: SN('Paper width in inches.'),
+      paperHeight: SN('Paper height in inches.'),
+      preferCSSPageSize: SB('Use the document\'s CSS @page size over paperWidth/Height.'),
+      omitBackground: SB('Omit background graphics.'),
       printBackground: SB('Include background graphics (default true).'),
       marginTop: SN('Top margin in inches.'),
       marginBottom: SN('Bottom margin in inches.'),
@@ -544,6 +560,38 @@ function publicTab(t: { targetId: string; url: string; title: string; type?: str
 }
 
 let activeDeps: ToolsDeps | undefined
+let fileSeq = 0
+function uniqueName(prefix: string, ext: string): string {
+  return `${prefix}-${Date.now()}-${++fileSeq}.${ext}`
+}
+
+// 与引擎 packages/engine/src/cdp/viewport.ts 一致的钳制：边长 ≤2560，总像素 ≤2560×1440
+const VP_MAX_SIDE = 2560
+const VP_MAX_PIXELS = 2560 * 1440
+const VP_MIN = 16
+function clampVp(w: number, h: number): { width: number; height: number } {
+  let width = Math.max(VP_MIN, Math.min(VP_MAX_SIDE, Math.floor(w)))
+  let height = Math.max(VP_MIN, Math.min(VP_MAX_SIDE, Math.floor(h)))
+  const px = width * height
+  if (px > VP_MAX_PIXELS) {
+    const scale = Math.sqrt(VP_MAX_PIXELS / px)
+    width = Math.max(VP_MIN, Math.floor(width * scale))
+    height = Math.max(VP_MIN, Math.floor(height * scale))
+  }
+  return { width, height }
+}
+
+function numOf(v: unknown): number | undefined {
+  return typeof v === 'number' && Number.isFinite(v) ? v : undefined
+}
+
+function clipArg(v: JsonValue | undefined): { x: number; y: number; width: number; height: number } | undefined {
+  if (!isRecord(v)) return undefined
+  const x = numOf(v.x), y = numOf(v.y), w = numOf(v.width), h = numOf(v.height)
+  if (x === undefined || y === undefined || w === undefined || h === undefined || w <= 0 || h <= 0) return undefined
+  const c = clampVp(w, h)
+  return { x, y, width: c.width, height: c.height }
+}
 
 async function screenshot(sess: SessionBrowser, deps: ToolsDeps, args: Record<string, JsonValue>, exec: ToolRunContext): Promise<JsonValue> {
   const r = await sess.resolveTab(strArg(args.tabId))
@@ -553,21 +601,53 @@ async function screenshot(sess: SessionBrowser, deps: ToolsDeps, args: Record<st
     const q = numArg(args.quality)
     if (q !== undefined) params.quality = Math.max(0, Math.min(100, Math.round(q)))
   }
-  if (boolArg(args.fullPage)) params.captureBeyondViewport = true
-  const res = await sess.cdp('Page.captureScreenshot', params, { sessionId: r.sessionId })
+  const clip = clipArg(args.clip)
+  if (clip) params.clip = clip
+
+  // fullPage：引擎无 captureBeyondViewport——临时把 viewport 拉伸到内容尺寸
+  // （setDeviceMetricsOverride 内部同样走 clampViewport），截完必须手动恢复
+  // （无 clearDeviceMetricsOverride，且它是静默 no-op）
+  const fullPage = boolArg(args.fullPage) === true
+  let restore: { width: number; height: number } | undefined
+  let resized: { width: number; height: number } | undefined
+  if (fullPage) {
+    const metrics = await sess.cdp('Page.getLayoutMetrics', {}, { sessionId: r.sessionId, signal: exec.signal })
+    const cs = (metrics.cssContentSize ?? metrics.contentSize ?? {}) as JsonObject
+    const lv = (metrics.cssLayoutViewport ?? metrics.layoutViewport ?? {}) as JsonObject
+    const cw = numOf(cs.width), ch = numOf(cs.height)
+    const vw = numOf(lv.clientWidth), vh = numOf(lv.clientHeight)
+    if (cw !== undefined && ch !== undefined && cw > 0 && ch > 0) {
+      resized = clampVp(cw, ch)
+      restore = vw !== undefined && vh !== undefined ? { width: vw, height: vh } : undefined
+      await sess.cdp('Emulation.setDeviceMetricsOverride',
+        { width: resized.width, height: resized.height, deviceScaleFactor: 1, mobile: false },
+        { sessionId: r.sessionId, signal: exec.signal })
+    }
+  }
+
+  let res: JsonObject
+  try {
+    res = await sess.cdp('Page.captureScreenshot', params, { sessionId: r.sessionId, signal: exec.signal })
+  } finally {
+    if (restore && resized) {
+      await sess.cdp('Emulation.setDeviceMetricsOverride',
+        { width: restore.width, height: restore.height, deviceScaleFactor: 1, mobile: false },
+        { sessionId: r.sessionId }).catch(() => { /* 恢复失败不掩盖截图结果 */ })
+    }
+  }
   const err = strOrUndef(res.error)
   if (err) throw new SurfbirdError('cdp_error', `screenshot failed: ${err}`)
   const data = strOrUndef(res.data)
   if (!data) throw new SurfbirdError('cdp_error', 'screenshot returned no data')
   const buf = Buffer.from(data, 'base64')
   const mediaType = format === 'jpeg' ? 'image/jpeg' : `image/${format}`
-  const name = `surfbird-${Date.now()}.${format === 'jpeg' ? 'jpg' : format}`
+  const name = uniqueName('surfbird', format === 'jpeg' ? 'jpg' : format)
 
   // 1) attachments 服务（模型可见 image block）
   if (deps.attachments) {
     try {
       const ref = await deps.attachments.saveImage({ data: buf, mediaType: mediaType as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif', name })
-      return ok({ text: `Screenshot ${buf.length} bytes (${format}${boolArg(args.fullPage) ? ', fullPage' : ''}).`, attachment: ref as unknown as JsonValue, bytes: buf.length, format })
+      return ok({ text: `Screenshot ${buf.length} bytes (${format}${fullPage ? `, fullPage ${resized?.width ?? '?'}x${resized?.height ?? '?'}` : ''}${clip ? ', clipped' : ''}).`, attachment: ref as unknown as JsonValue, bytes: buf.length, format })
     } catch { /* 降级到文件 */ }
   }
   // 2) outputDir / tmp 落盘
@@ -579,17 +659,18 @@ async function screenshot(sess: SessionBrowser, deps: ToolsDeps, args: Record<st
 }
 
 async function pdf(sess: SessionBrowser, deps: ToolsDeps, args: Record<string, JsonValue>, exec: ToolRunContext): Promise<JsonValue> {
-  void exec
   const r = await sess.resolveTab(strArg(args.tabId))
   const params: JsonObject = {
     landscape: boolArg(args.landscape) === true,
     printBackground: boolArg(args.printBackground) !== false,
   }
-  for (const k of ['marginTop', 'marginBottom', 'marginLeft', 'marginRight'] as const) {
+  for (const k of ['paperWidth', 'paperHeight', 'marginTop', 'marginBottom', 'marginLeft', 'marginRight'] as const) {
     const v = numArg(args[k])
     if (v !== undefined) params[k] = v
   }
-  const res = await sess.cdp('Page.printToPDF', params, { sessionId: r.sessionId })
+  if (boolArg(args.preferCSSPageSize)) params.preferCSSPageSize = true
+  if (boolArg(args.omitBackground)) params.omitBackground = true
+  const res = await sess.cdp('Page.printToPDF', params, { sessionId: r.sessionId, signal: exec.signal })
   const err = strOrUndef(res.error)
   if (err) throw new SurfbirdError('cdp_error', `printToPDF failed: ${err}`)
   const data = strOrUndef(res.data)
@@ -597,7 +678,7 @@ async function pdf(sess: SessionBrowser, deps: ToolsDeps, args: Record<string, J
   const buf = Buffer.from(data, 'base64')
   const dir = deps.outputDir ?? join(tmpdir(), 'surfbird')
   await mkdir(dir, { recursive: true })
-  const path = join(dir, `surfbird-${Date.now()}.pdf`)
+  const path = join(dir, uniqueName('surfbird', 'pdf'))
   await writeFile(path, buf)
   return ok({ text: `PDF saved to ${path} (${buf.length} bytes).`, path, bytes: buf.length })
 }
@@ -612,6 +693,9 @@ export function registerSurfbirdTools(ctx: Context, deps: ToolsDeps): () => void
       parameters: def.parameters,
       output: { schema: { type: 'json' }, render: renderResult },
       timeoutMs: deps.requestTimeoutMs,
+      // 全部工具安全并行：同 session 经 sess.enqueue 按提交序串行，
+      // 跨 session 是独立 WS/浏览器状态，无共享可变状态
+      isConcurrencySafe: () => true,
       async execute(args: Record<string, JsonValue>, exec: ToolRunContext): Promise<JsonValue> {
         const key = sessionKey(exec)
         let sess: SessionBrowser
