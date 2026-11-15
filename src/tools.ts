@@ -438,7 +438,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'surfbird_screenshot',
-    description: 'Capture the tab viewport (or fullPage via temporary viewport resize — engine has no captureBeyondViewport). Returns an image attachment when the attachments service is available; otherwise writes to outputDir/tmp and returns a path. Engine returns placeholder+error field on failure — the tool checks it. Dimensions clamp to engine limits (side ≤2560, ≤2560×1440 px).',
+    description: 'Capture the tab viewport (or fullPage via temporary viewport resize — engine has no captureBeyondViewport). Returns an image attachment for the user to view; text-only models get a placeholder, so use snapshot/extract/wait for self-verification. Writes to outputDir/tmp and returns a path when the attachments service is unavailable. Engine returns placeholder+error field on failure — the tool checks it. Dimensions clamp to engine limits (side ≤2560, ≤2560×1440 px).',
     parameters: {
       tabId: TAB_ID,
       fullPage: SB('Resize viewport to full content size before capture (clamped to engine limits), then restore.'),

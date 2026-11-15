@@ -49,7 +49,7 @@ Use `surfbird_find` to check whether specific text appears on the page, count oc
 
 ## Screenshots and PDF
 
-- `surfbird_screenshot` waits for `load` by default before capturing (`waitFor` param: `none`/`load`/`domcontentloaded`/`networkidle`/`stable`, `timeoutMs` caps the wait). Pass `waitFor=networkidle` or `stable` when the page keeps mutating after load — a `load`-only wait can still capture a half-rendered SPA. Returns an image attachment when available; otherwise a file path (`attachmentUnavailable`). `fullPage` is capped ~1440px tall by the engine.
+- `surfbird_screenshot` waits for `load` by default before capturing (`waitFor` param: `none`/`load`/`domcontentloaded`/`networkidle`/`stable`, `timeoutMs` caps the wait). Pass `waitFor=networkidle` or `stable` when the page keeps mutating after load — a `load`-only wait can still capture a half-rendered SPA. Returns an image attachment when available; otherwise a file path (`attachmentUnavailable`). `fullPage` is capped ~1440px tall by the engine. **The image is for the user** — text-only models receive a placeholder instead of pixels, so verify page state yourself with `surfbird_snapshot`/`surfbird_extract`/`surfbird_wait`, never by describing the screenshot.
 - `surfbird_pdf` has the same `waitFor`/`timeoutMs` params and always returns a file path — PDFs are not image attachments.
 
 ## Diagnostics
