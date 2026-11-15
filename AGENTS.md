@@ -20,11 +20,14 @@ DSH 插件：通过 Kitesurf CDP 协议控制浏览器引擎（surfbird raw/auth
 ## 共享代码约定（与 opencode-control-surfbird-for-kitesurf）
 
 - `src/cdp/` 是将来要整目录复制到 opencode 仓库的共享核心
-- `src/cdp/` 内**禁止** import `@deepseek-ai/*` 或 `src/` 其他模块，只依赖 `ws` + node builtins
+- `src/cdp/` 内**禁止** import `@deepseek-ai/*`、opencode/pi 等 host 框架包或 `src/` 其他模块；
+  只依赖通用 npm 包（`ws`、`@mozilla/readability`、`turndown`）+ node builtins——目标仓库需同装这三个依赖
 - 改 `src/cdp/` 后需人工同步 opencode 仓库（在 commit message 注明）
 
 ## 引擎边界（不要假设）
 
+- `src/` 与 `client/` 只用可擦除 TS 语法（Node type stripping：禁 enum/namespace/参数属性）；
+  相对 import 写 `.ts` 扩展名（tsconfig 已配 allowImportingTsExtensions）
 - 每 WS 连接 = 一台独立浏览器（per-connection BrowserState），断线=所有 tab 蒸发
 - 单 WS 60 分钟硬上限、10 分钟 idle 超时（keepalive 必须 <10min）
 - Kitesurf 是 Boa + DOM shim 不是 V8/Chromium：无 JS dialog、无文件上传/下载、

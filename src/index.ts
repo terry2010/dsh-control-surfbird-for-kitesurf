@@ -14,18 +14,35 @@
  * @module dsh-control-surfbird-for-kitesurf
  */
 
+import { appendFileSync, mkdirSync, readFileSync } from 'node:fs'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import type { Context } from '@deepseek-ai/cordis'
+import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import z from '@deepseek-ai/schemastery'
+import { SessionRegistry } from './cdp/session.ts'
+import type { SessionOptions } from './cdp/session.ts'
+import { registerSurfbirdTools } from './tools.ts'
+import { registerSurfbirdSkill } from './skill.ts'
+import { normalizeEndpoint } from './cdp/transport.ts'
 
 export const name = 'control-surfbird'
 
 /** v1 不需要 agents/sessions 服务：session 归属走 exec.agent.session。 */
 export const inject: string[] = []
 
+const DEFAULT_ENDPOINT = 'http://127.0.0.1:8080'
+const ENDPOINT_ENVS = ['SURFBIRD_URL', 'SURFBIRD_ENDPOINT', 'KITESURF_URL', 'KITESURF_ENDPOINT'] as const
+const TOKEN_ENVS = ['SURFBIRD_TOKEN', 'KITESURF_TOKEN'] as const
+const SETTINGS_NAMESPACE = 'control-surfbird'
+
 export const Config = z.object({
-  endpoint: z.string().default('http://127.0.0.1:8080').volatile()
+  endpoint: z.string().default(DEFAULT_ENDPOINT).volatile()
     .description('Kitesurf CDP 端点：http(s) base（自动转 ws://…/devtools/browser）或完整 ws(s):// URL；env 兜底 SURFBIRD_URL→SURFBIRD_ENDPOINT→KITESURF_URL→KITESURF_ENDPOINT'),
   token: z.string().volatile()
-    .description('Bearer token（surfbird auth 镜像需要）；env 兜底 SURFBIRD_TOKEN→KITESURF_TOKEN，空=无认证'),
+    .description('Bearer token（surfbird auth 镜像需要）；tokenFile 优先；env 兜底 SURFBIRD_TOKEN→KITESURF_TOKEN，空=无认证'),
+  tokenFile: z.string().volatile()
+    .description('可选：token 文件路径（内容为 Bearer token）；优先于 token 字段，token 不落配置文件'),
   requestTimeoutMs: z.natural().min(1000).default(120000).volatile()
     .description('单条 CDP 调用超时（毫秒）'),
   keepaliveMs: z.natural().min(30000).default(300000).volatile()
@@ -35,12 +52,197 @@ export const Config = z.object({
   idleEvictMs: z.natural().min(60000).default(300000).volatile()
     .description('session 闲置超过此时长（毫秒）才允许被 maxSessions 驱逐'),
   screenshotDir: z.string().volatile()
-    .description('可选：截图同时落盘到该目录'),
+    .description('可选：截图/PDF 同时落盘到该目录（attachments 服务不可用时的兜底）'),
   debugLog: z.boolean().default(false).volatile()
     .description('写诊断日志到 ~/.dsh/surfbird-debug.log；默认关'),
 })
 
-export function apply(ctx: any, config: any): () => void {
-  // M1 脚手架：工具注册在 src/tools.ts（M2+ 实现）。
-  return () => {}
+export interface ResolvedConfig {
+  endpoint: string
+  token: string
+  tokenFile?: string
+  requestTimeoutMs: number
+  keepaliveMs: number
+  maxSessions: number
+  idleEvictMs: number
+  screenshotDir?: string
+  debugLog: boolean
+  /** endpoint/token 的实际来源（status 路由用）。 */
+  configSource: string
+}
+
+function env(name: string): string | undefined {
+  const v = process.env[name]
+  return v && v.trim() ? v.trim() : undefined
+}
+
+function firstEnv(names: readonly string[]): string | undefined {
+  for (const n of names) {
+    const v = env(n)
+    if (v) return v
+  }
+  return undefined
+}
+
+function readTokenFile(path: string | undefined): string | undefined {
+  if (!path) return undefined
+  try {
+    const t = readFileSync(path, 'utf8').trim()
+    return t || undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** 解析生效配置：config（settings scope 或 apply 入参）> env > 默认。 */
+export function resolveConfig(config: Record<string, unknown>): ResolvedConfig {
+  const cfgEndpoint = typeof config.endpoint === 'string' && config.endpoint.trim() ? config.endpoint.trim() : undefined
+  const envEndpoint = firstEnv(ENDPOINT_ENVS)
+  // config.endpoint 有 schemastery 默认值——等于默认值时让 env 优先
+  const endpoint = cfgEndpoint && cfgEndpoint !== DEFAULT_ENDPOINT ? cfgEndpoint : (envEndpoint ?? cfgEndpoint ?? DEFAULT_ENDPOINT)
+  const endpointSource = cfgEndpoint && cfgEndpoint !== DEFAULT_ENDPOINT ? 'config' : envEndpoint ? 'env' : 'default'
+
+  const tokenFile = typeof config.tokenFile === 'string' && config.tokenFile.trim() ? config.tokenFile.trim() : undefined
+  const cfgToken = typeof config.token === 'string' && config.token.trim() ? config.token.trim() : undefined
+  const envToken = firstEnv(TOKEN_ENVS)
+  const fileToken = readTokenFile(tokenFile)
+  const token = fileToken ?? cfgToken ?? envToken ?? ''
+  const tokenSource = fileToken ? 'tokenFile' : cfgToken ? 'config' : envToken ? 'env' : 'none'
+
+  return {
+    endpoint,
+    token,
+    tokenFile,
+    requestTimeoutMs: typeof config.requestTimeoutMs === 'number' ? config.requestTimeoutMs : 120000,
+    keepaliveMs: typeof config.keepaliveMs === 'number' ? config.keepaliveMs : 300000,
+    maxSessions: typeof config.maxSessions === 'number' ? config.maxSessions : 8,
+    idleEvictMs: typeof config.idleEvictMs === 'number' ? config.idleEvictMs : 300000,
+    screenshotDir: typeof config.screenshotDir === 'string' && config.screenshotDir.trim() ? config.screenshotDir.trim() : undefined,
+    debugLog: config.debugLog === true,
+    configSource: `${endpointSource}+${tokenSource}`,
+  }
+}
+
+/** ws(s)://…/devtools/browser → http(s)://host（探活 /json/version 用）。 */
+function httpBase(endpoint: string): string | undefined {
+  try {
+    const ws = normalizeEndpoint(endpoint)
+    const u = new URL(ws)
+    u.protocol = u.protocol === 'wss:' ? 'https:' : 'http:'
+    u.pathname = ''
+    u.search = ''
+    return u.toString().replace(/\/$/, '')
+  } catch {
+    return undefined
+  }
+}
+
+export function apply(ctx: Context, config: Record<string, unknown>): () => void {
+  // settings scope：让 client configForms 的写入实时生效（服务缺失时退化为 apply 入参）
+  let currentSource: () => Record<string, unknown> = () => config
+  try {
+    ctx.inject(['settings'], (settingsCtx) => {
+      const scope = (settingsCtx as { settings?: { register?: (ns: string, schema: unknown, opts: { base: unknown }) => { get: () => Record<string, unknown> } } }).settings
+      if (scope?.register) {
+        const s = scope.register(SETTINGS_NAMESPACE, Config, { base: config })
+        currentSource = () => s.get()
+      }
+    })
+  } catch { /* settings 服务缺失 → 静态 config */ }
+
+  const resolved = (): ResolvedConfig => resolveConfig(currentSource())
+  const registry = new SessionRegistry({ maxSessions: resolved().maxSessions, idleEvictMs: resolved().idleEvictMs })
+  const attachments = ctx.get('attachments') as AttachmentStore | undefined
+
+  const sessionOpts = (): SessionOptions => {
+    const c = resolved()
+    return { endpoint: c.endpoint, token: c.token, requestTimeoutMs: c.requestTimeoutMs, keepaliveMs: c.keepaliveMs }
+  }
+
+  const deps = {
+    registry,
+    sessionOpts,
+    get requestTimeoutMs() { return resolved().requestTimeoutMs },
+    get attachments() { return attachments },
+    get outputDir() { return resolved().screenshotDir },
+    onSessionError: (_key: string, err: unknown) => {
+      if (resolved().debugLog) logDebug(`session error: ${err instanceof Error ? err.message : String(err)}`)
+    },
+  }
+
+  const disposeTools = registerSurfbirdTools(ctx, deps)
+  registerSurfbirdSkill(ctx)
+
+  // agent 销毁 → 断开该 session 的浏览器（引擎侧 tab 全灭）
+  const offDisposed = ctx.on('agent/disposed', ({ agent }: { agent?: { session?: { id?: unknown } } }) => {
+    const id = agent?.session?.id
+    if (typeof id === 'string' && id) void registry.release(id).catch(() => undefined)
+  })
+
+  // 状态路由：client toast/设置页探活用；?probe=1 才真实请求 /json/version
+  let unregisterStatus: (() => void) | undefined
+  try {
+    const webServer = (ctx as unknown as { webServer?: { register?: (r: unknown) => () => void } }).webServer
+      ?? (ctx.get?.('webServer') as { register?: (r: unknown) => () => void } | undefined)
+    if (webServer?.register) {
+      unregisterStatus = webServer.register({
+        kind: 'exact',
+        path: '/plugins/control-surfbird/status',
+        resource: async (request: Request) => {
+          const c = resolved()
+          const url = new URL(request.url)
+          const body: Record<string, unknown> = {
+            configSource: c.configSource,
+            endpointSet: !!c.endpoint,
+            tokenSet: !!c.token,
+            tokenFileSet: !!c.tokenFile,
+            configured: !!c.endpoint,
+            activeSessions: registry.size(),
+          }
+          if (url.searchParams.get('probe') === '1') {
+            const base = httpBase(c.endpoint)
+            if (base) {
+              try {
+                const ctrl = new AbortController()
+                const t = setTimeout(() => ctrl.abort(), 3000)
+                const res = await fetch(`${base}/json/version`, { signal: ctrl.signal })
+                clearTimeout(t)
+                if (res.ok) {
+                  const v = (await res.json()) as Record<string, unknown>
+                  body.reachable = true
+                  body.product = v.Browser ?? v.product
+                  body.webSocketDebuggerUrl = v.webSocketDebuggerUrl
+                } else {
+                  body.reachable = false
+                  body.probeStatus = res.status
+                }
+              } catch (e) {
+                body.reachable = false
+                body.probeError = e instanceof Error ? e.message : String(e)
+              }
+            } else {
+              body.reachable = false
+              body.probeError = 'endpoint is not a valid URL'
+            }
+          }
+          return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
+        },
+      })
+    }
+  } catch { /* webServer 服务缺失 → 无状态路由 */ }
+
+  return () => {
+    offDisposed?.()
+    unregisterStatus?.()
+    disposeTools()
+    void registry.disposeAll()
+  }
+}
+
+function logDebug(msg: string): void {
+  try {
+    const dir = join(homedir(), '.dsh')
+    mkdirSync(dir, { recursive: true })
+    appendFileSync(join(dir, 'surfbird-debug.log'), `${new Date().toISOString()} ${msg}\n`)
+  } catch { /* debug log 尽力而为 */ }
 }

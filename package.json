@@ -6,11 +6,13 @@
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",
+    "./client": "./client/client.js",
     "./package.json": "./package.json"
   },
   "files": [
     "src",
     "lib",
+    "client",
     "skills",
     "cordis.patch.yml",
     "README.md",
@@ -23,6 +25,7 @@
     "build": "tsc -p tsconfig.json",
     "prepack": "npm run build",
     "test": "node --test test/unit/*.test.mjs",
+    "test:live": "node --test test/live/*.test.mjs",
     "check": "node --input-type=module -e \"import('./src/index.ts').then(m => { if (typeof m.apply !== 'function') throw new Error('apply missing'); if (!m.name) throw new Error('name missing'); console.log('OK', m.name) })\""
   },
   "keywords": [
@@ -43,16 +46,27 @@
   "dsh": {
     "bundle": {
       "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-primitives",
+        "@deepseek-ai/dsh-client-runtime"
+      ]
     }
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.2",
     "@deepseek-ai/dsh-agent": "^0.1.1-rc.1",
+    "@deepseek-ai/dsh-attachment": "^0.1.1-rc.1",
     "@deepseek-ai/dsh-tools": "^0.1.1-rc.1"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "^4.0.5",
     "@deepseek-ai/dsh-agent": "^0.1.1-rc.1",
+    "@deepseek-ai/dsh-attachment": "^0.1.1-rc.1",
     "@deepseek-ai/dsh-tools": "^0.1.1-rc.1",
     "@deepseek-ai/schemastery": "^3.18.5",
     "@types/node": "^26.6.6",
