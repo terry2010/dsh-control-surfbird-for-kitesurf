@@ -310,6 +310,8 @@ window.__ModuleLoader__.load({
         ]
         // 密钥/密钥文件 二选一 toggle：tokenFile 非空→file，否则 token；
         // 切回 token 会清掉 tokenFile（tokenFile 优先级更高，不清则不生效）。
+        // 设置页字段容器是两列 grid——authSection 用 gridColumn 整行横跨，
+        // 行内：[紧凑分段按钮][输入框 flex:1]（文件态再加 [选择文件]）。
         const segBtn = (modeKey, fieldKey) => el('button', {
           key: modeKey,
           onClick: () => {
@@ -318,32 +320,34 @@ window.__ModuleLoader__.load({
             if (modeKey === 'token') write('tokenFile', undefined)
           },
           style: {
-            flex: 1, fontSize: 12, padding: '5px 0', borderRadius: 6, cursor: 'pointer',
-            border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)',
+            minWidth: 58, fontSize: 12, padding: '4px 10px', borderRadius: 6, cursor: 'pointer',
+            border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)', textAlign: 'center',
             background: mode === modeKey ? 'var(--dsw-alias-button-primary-fill,#4a6cf7)' : 'transparent',
             color: mode === modeKey ? '#fff' : 'inherit',
           },
         }, t(`f.${fieldKey}`))
         const browseBtn = el('button', {
           onClick: pickTokenFile,
-          style: { fontSize: 12, padding: '3px 10px', borderRadius: 6, whiteSpace: 'nowrap', cursor: 'pointer',
+          style: { fontSize: 12, padding: '3px 10px', borderRadius: 6, whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0,
             border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)', background: 'transparent' },
         }, t('browse'))
+        const inputFill = { flex: 1, width: 'auto', minWidth: 0 }
         const authSection = (() => {
           const tokenF = groups.main?.find((f) => f.key === 'token')
           const fileF = groups.main?.find((f) => f.key === 'tokenFile')
           if (!tokenF || !fileF) return null
-          return el('div', { key: 'auth', style: { padding: '4px 0' } },
-            el('div', { style: { display: 'flex', gap: 6, marginBottom: 2, maxWidth: 220 } }, segBtn('token', 'token'), segBtn('file', 'tokenFile')),
-            mode === 'token'
-              ? el('div', { style: { padding: '4px 0' } }, control(tokenF, data.token, write))
-              : el('div', null,
-                  el('div', { style: { display: 'flex', gap: 6, alignItems: 'center' } },
-                    control(fileF, data.tokenFile, write, { width: '100%', minWidth: 0, flex: 1 }), browseBtn),
-                  el('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-secondary,#888)', paddingTop: 2 } }, t('hint.tokenFile')),
-                  importNote ? el('div', {
-                    style: { fontSize: 11, paddingTop: 2, color: importNote.bad ? '#cf222e' : '#1a7f37' },
-                  }, importNote.text) : null))
+          return el('div', { key: 'auth', style: { gridColumn: '1 / -1', padding: '4px 0' } },
+            el('div', { style: { display: 'flex', alignItems: 'center', gap: 8 } },
+              el('div', { style: { display: 'flex', gap: 4, flexShrink: 0 } }, segBtn('token', 'token'), segBtn('file', 'tokenFile')),
+              mode === 'token'
+                ? control(tokenF, data.token, write, inputFill)
+                : el('div', { style: { display: 'flex', gap: 6, flex: 1, minWidth: 0, alignItems: 'center' } },
+                    control(fileF, data.tokenFile, write, inputFill), browseBtn)),
+            mode === 'file' ? el('div', null,
+              el('div', { style: { fontSize: 11, color: 'var(--dsw-alias-label-secondary,#888)', paddingTop: 2 } }, t('hint.tokenFile')),
+              importNote ? el('div', {
+                style: { fontSize: 11, paddingTop: 2, color: importNote.bad ? '#cf222e' : '#1a7f37' },
+              }, importNote.text) : null) : null)
         })()
         for (const g of ['main', 'advanced']) {
           const items = groups[g] ?? []
