@@ -1,11 +1,11 @@
 # dsh-control-surfbird-for-kitesurf
 
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](https://github.com/terry2010/dsh-control-surfbird-for-kitesurf/blob/master/LICENSE)
 [![npm](https://img.shields.io/npm/v/dsh-control-surfbird-for-kitesurf)](https://www.npmjs.com/package/dsh-control-surfbird-for-kitesurf)
 [![npm downloads](https://img.shields.io/npm/dm/dsh-control-surfbird-for-kitesurf)](https://www.npmjs.com/package/dsh-control-surfbird-for-kitesurf)
 [![DSH](https://img.shields.io/badge/DSH-0.2.x-green.svg)](https://github.com/terry2010/dsh-control-surfbird-for-kitesurf)
 
-**English** | [中文](README.zh-CN.md)
+**English** | [中文](https://github.com/terry2010/dsh-control-surfbird-for-kitesurf/blob/master/i18n/README.zh-CN.md)
 
 A [DSH](https://www.deepseek.com/) (DeepSeek Harness) plugin that gives an AI agent full control of a [Kitesurf](https://github.com/cloudflare/kitesurf) browser engine over the Chrome DevTools Protocol (CDP) — like a human operating a browser. Works with the self-hosted [surfbird](https://github.com/terry2010/surfbird) distribution (raw or token-auth mode) and upstream Kitesurf deployments. Exposes **28 `surfbird_*` tools**: tab management, navigation, semantic accessibility snapshots, click/type/fill, waits, JavaScript evaluation, screenshots, PDF export, and console/network inspection — with one isolated browser per agent session.
 
@@ -228,7 +228,7 @@ Anything the engine can't: JS dialogs, file upload/download, clipboard, drag/tou
 
 ## License
 
-[Apache-2.0](LICENSE)
+[Apache-2.0](https://github.com/terry2010/dsh-control-surfbird-for-kitesurf/blob/master/LICENSE)
 
 ## Related projects
 

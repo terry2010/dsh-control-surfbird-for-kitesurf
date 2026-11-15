@@ -19,7 +19,7 @@
     "skills",
     "cordis.patch.yml",
     "README.md",
-    "README.zh-CN.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
@@ -110,5 +110,9 @@
     "@deepseek-ai/dsh-util-values": {
       "optional": true
     }
+  },
+  "author": {
+    "name": "terry2010",
+    "url": "https://github.com/terry2010"
   }
 }

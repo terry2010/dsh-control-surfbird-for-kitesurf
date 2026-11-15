@@ -14,7 +14,7 @@
 ## Documentation
 
 - [README (English)](README.md) — features, install, configuration, all 28 tools, test prompts
-- [README (中文)](README.zh-CN.md) — Chinese version
+- [README (中文)](i18n/README.zh-CN.md) — Chinese version
 - [Agent skill doc](skills/surfbird-control/SKILL.md) — model-facing usage guide bundled with the plugin
 - [CHANGELOG](CHANGELOG.md) — release history
 - [Contributing](CONTRIBUTING.md) — dev setup and verification commands
