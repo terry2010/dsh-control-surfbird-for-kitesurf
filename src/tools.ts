@@ -78,11 +78,27 @@ interface ToolDef {
   needsTargetDoc?: boolean
 }
 
-function ok(data: JsonValue): JsonValue {
-  if (typeof data === 'object' && data !== null && !Array.isArray(data)) {
-    return { ok: true, ...(data as JsonObject) }
+/** DSH 输出必须是 lossless JSON：递归剔除 undefined，非有限数转 null。 */
+function stripUndef(v: unknown): unknown {
+  if (Array.isArray(v)) return v.map(stripUndef)
+  if (isRecord(v)) {
+    const o: Record<string, unknown> = {}
+    for (const [k, x] of Object.entries(v)) {
+      const y = stripUndef(x)
+      if (y !== undefined) o[k] = y
+    }
+    return o
   }
-  return { ok: true, data }
+  if (typeof v === 'number' && !Number.isFinite(v)) return null
+  return v
+}
+
+function ok(data: JsonValue): JsonValue {
+  const clean = stripUndef(data)
+  if (typeof clean === 'object' && clean !== null && !Array.isArray(clean)) {
+    return { ok: true, ...(clean as JsonObject) }
+  }
+  return { ok: true, data: clean as JsonValue }
 }
 
 function fail(e: unknown): JsonValue {

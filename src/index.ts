@@ -28,8 +28,8 @@ import { normalizeEndpoint } from './cdp/transport.ts'
 
 export const name = 'control-surfbird'
 
-/** v1 不需要 agents/sessions 服务：session 归属走 exec.agent.session。 */
-export const inject: string[] = []
+/** 硬依赖 tools 服务（25 个工具是插件主体）；attachments/skills/webServer/settings 均为可选，走 ctx.get/ctx.inject 软获取。 */
+export const inject: string[] = ['tools']
 
 const DEFAULT_ENDPOINT = 'http://127.0.0.1:8080'
 const ENDPOINT_ENVS = ['SURFBIRD_URL', 'SURFBIRD_ENDPOINT', 'KITESURF_URL', 'KITESURF_ENDPOINT'] as const
@@ -164,7 +164,10 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
 
   const resolved = (): ResolvedConfig => resolveConfig(currentSource())
   const registry = new SessionRegistry({ maxSessions: resolved().maxSessions, idleEvictMs: resolved().idleEvictMs })
-  const attachments = ctx.get('attachments') as AttachmentStore | undefined
+  // attachments 服务延迟解析：apply 时服务可能尚未激活，截图时再取
+  const getAttachments = (): AttachmentStore | undefined => {
+    try { return ctx.get('attachments') as AttachmentStore | undefined } catch { return undefined }
+  }
 
   const sessionOpts = (): SessionOptions => {
     const c = resolved()
@@ -175,7 +178,7 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
     registry,
     sessionOpts,
     get requestTimeoutMs() { return resolved().requestTimeoutMs },
-    get attachments() { return attachments },
+    get attachments() { return getAttachments() },
     get outputDir() { return resolved().screenshotDir },
     configInfo: () => {
       const c = resolved()
@@ -187,7 +190,10 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
   }
 
   const disposeTools = registerSurfbirdTools(ctx, deps)
-  registerSurfbirdSkill(ctx)
+  // skills 服务可能晚于 apply 激活——inject 回调等到就注册；缺失则静默降级
+  try {
+    ctx.inject(['skills'], (skillsCtx) => { registerSurfbirdSkill(skillsCtx) })
+  } catch { /* skills 服务缺失 → 无 skill */ }
 
   // agent 销毁 → 断开该 session 的浏览器（引擎侧 tab 全灭）
   const offDisposed = ctx.on('agent/disposed', ({ agent }: { agent?: { id?: unknown; session?: { id?: unknown } } }) => {
@@ -196,11 +202,12 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
   })
 
   // 状态路由：client toast/设置页探活用；?probe=1 才真实请求 /json/version
+  // webServer 服务可能缺失（headless profile）——inject 回调等到就注册
   let unregisterStatus: (() => void) | undefined
   try {
-    const webServer = (ctx as unknown as { webServer?: { register?: (r: unknown) => () => void } }).webServer
-      ?? (ctx.get?.('webServer') as { register?: (r: unknown) => () => void } | undefined)
-    if (webServer?.register) {
+    ctx.inject(['webServer'], (webCtx) => {
+      const webServer = webCtx.get('webServer') as { register?: (r: unknown) => () => void } | undefined
+      if (!webServer?.register) return
       unregisterStatus = webServer.register({
         kind: 'exact',
         path: '/plugins/control-surfbird/status',
@@ -221,7 +228,9 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
               try {
                 const ctrl = new AbortController()
                 const t = setTimeout(() => ctrl.abort(), 3000)
-                const res = await fetch(`${base}/json/version`, { signal: ctrl.signal })
+                const headers: Record<string, string> = {}
+                if (c.token) headers.authorization = `Bearer ${c.token}`
+                const res = await fetch(`${base}/json/version`, { signal: ctrl.signal, headers })
                 clearTimeout(t)
                 if (res.ok) {
                   const v = (await res.json()) as Record<string, unknown>
@@ -244,7 +253,7 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
           return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
         },
       })
-    }
+    })
   } catch { /* webServer 服务缺失 → 无状态路由 */ }
 
   return () => {
