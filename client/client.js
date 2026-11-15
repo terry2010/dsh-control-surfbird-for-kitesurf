@@ -403,16 +403,49 @@ window.__ModuleLoader__.load({
       })
     }
 
-    /** tool.call.toolview 行：连接类失败 → 行内"打开设置"。 */
+    /** tool.call.toolview 行：连接类失败 → 行内"打开设置"；
+     *  结果含 image block（surfbird_screenshot）→ loadImage 取 URL 渲染缩略图。
+     *  注意：tool.call.images 子槽位被 read_image 独占不能声明，只能直接 <img>。 */
     function makeToolRow(React, nav, t) {
       const el = React.createElement
+      // 单张工具结果图片：loadImage 是 chat 注入的 Gateway 授权 loader，
+      // 返回可直接放 <img> 的 URL；peek 有同步缓存就先用，避免闪烁。
+      function ToolResultImage({ att, loadImage }) {
+        const [url, setUrl] = React.useState(() => {
+          try { return loadImage?.peek?.(att) } catch { return undefined }
+        })
+        const [failed, setFailed] = React.useState(false)
+        React.useEffect(() => {
+          if (url || !loadImage) return undefined
+          let dead = false
+          Promise.resolve()
+            .then(() => loadImage(att))
+            .then((u) => { if (!dead && typeof u === 'string' && u) setUrl(u) })
+            .catch(() => { if (!dead) setFailed(true) })
+          return () => { dead = true }
+        }, [att?.attachmentId, loadImage]) // eslint-disable-line react-hooks/exhaustive-deps
+        if (failed) {
+          return el('span', { style: { fontSize: 11, opacity: 0.6 } }, att.name ?? 'image')
+        }
+        if (!url) return el('span', { style: { fontSize: 11, opacity: 0.6 } }, '…')
+        return el('img', {
+          src: url,
+          alt: att.name ?? 'surfbird screenshot',
+          title: `${att.width ?? '?'}×${att.height ?? '?'} · ${Math.round((att.bytes ?? 0) / 1024)}KB`,
+          onClick: () => { try { window.open(url, '_blank') } catch { /* */ } },
+          style: {
+            maxWidth: 360, maxHeight: 280, width: 'auto', height: 'auto', display: 'block',
+            borderRadius: 6, border: '1px solid var(--dsw-alias-border-l2,#d9d9d9)', cursor: 'zoom-in',
+          },
+        })
+      }
       return function SurfbirdToolRow(props) {
-        const { toolName, block } = props ?? {}
+        const { toolName, block, phase, loadImage } = props ?? {}
         // 递归扫描整个 props（含 block 结果节点）找 {ok:false,error:{code}}
         const code = toolErrorCode(props) ?? (block !== props?.block ? toolErrorCode(block) : undefined)
         const connFail = code && CONN_CODES.has(code)
         const name = toolName ?? 'surfbird_*'
-        const base = el('div', {
+        const row = el('div', {
           'data-surfbird-row': name,
           style: { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12,
             fontFamily: 'monospace', opacity: 0.85 },
@@ -426,7 +459,19 @@ window.__ModuleLoader__.load({
                 title: code,
               }, `⚠ ${t('row.fail')} · ${t('openSettings')}`)
             : null)
-        return base
+        // settled 结果里的 image blocks（目前只有 surfbird_screenshot 产出）
+        const images = []
+        if (phase === 'result' && loadImage && Array.isArray(block?.content)) {
+          for (const part of block.content) {
+            const att = part?.type === 'image' ? part.attachment : undefined
+            if (att?.attachmentId) images.push(att)
+          }
+        }
+        if (!images.length) return row
+        return el('div', { style: { display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 } },
+          row,
+          el('div', { style: { display: 'flex', flexWrap: 'wrap', gap: 6, padding: '2px 0 4px' } },
+            images.map((att, i) => el(ToolResultImage, { key: att.attachmentId ?? i, att, loadImage }))))
       }
     }
 
