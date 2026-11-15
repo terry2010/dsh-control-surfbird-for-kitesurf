@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-15
+
+### Fixed
+
+- npm package page rendered the Chinese README as the package readme —
+  npm auto-includes root-level `README*` files regardless of `files`,
+  and its picker chose `README.zh-CN.md`. The Chinese README moved to
+  `i18n/README.zh-CN.md` so the published tarball ships only `README.md`.
+- README `LICENSE` and language-switch links were relative and 404'd on
+  npmjs.com — now absolute GitHub URLs.
+
+### Added
+
+- `CHANGELOG.md` and `author` metadata now ship in the npm package.
+- Expanded npm `keywords` (ai-agent, browser-automation, agent-tools,
+  web-automation).
+- `llms.txt` for AI/LLM-readable project discovery.
+- `CONTRIBUTING.md` and GitHub issue templates (bug report, feature
+  request).
+- npm version/downloads badges and a table of contents in both READMEs.
+
 ## [0.5.0] - 2026-11-15
 
 ### Added
