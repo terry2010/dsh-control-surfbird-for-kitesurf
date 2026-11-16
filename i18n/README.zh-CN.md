@@ -233,6 +233,7 @@ npm pack --dry-run
 ## 相关项目
 
 - [opencode-control-surfbird-for-kitesurf](https://github.com/terry2010/opencode-control-surfbird-for-kitesurf) —— 姊妹插件：同一套 28 个 `surfbird_*` 工具的 [OpenCode](https://opencode.ai/) 版本（桌面端 + TUI，带设置页/弹窗）；与本仓库共享 host 无关的 `src/cdp/` 核心
+- [pi-control-surfbird-for-kitesurf](https://github.com/terry2010/pi-control-surfbird-for-kitesurf) —— 姊妹插件：同一套 28 个 `surfbird_*` 工具的 [Pi](https://pi.dev/) coding agent 版本；与本仓库共享 host 无关的 `src/cdp/` 核心
 - [surfbird](https://github.com/terry2010/surfbird) —— Kitesurf 的自托管 Docker 发行版，含 token 认证、REST 代理和 MCP 服务
 - [Kitesurf](https://github.com/cloudflare/kitesurf) —— Cloudflare 的实验性浏览器引擎，为 AI agent 而生；跑在 Workers 上，讲 CDP
 - [DeepSeek Harness（DSH）](https://www.deepseek.com/) —— 本插件所扩展的 agent 运行时
