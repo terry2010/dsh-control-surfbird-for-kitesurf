@@ -864,7 +864,8 @@ export function registerSurfbirdTools(ctx: Context, deps: ToolsDeps): () => void
         const key = sessionKey(exec)
         let sess: SessionBrowser
         try {
-          sess = deps.registry.get(key, deps.sessionOpts())
+          // 传 getter 而非快照：配置热更后，既有 session 的下一次（重）连即生效新端点/密钥
+          sess = deps.registry.get(key, deps.sessionOpts)
         } catch (e) {
           return fail(e)
         }

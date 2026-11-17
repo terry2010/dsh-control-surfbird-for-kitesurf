@@ -31,7 +31,7 @@ window.__ModuleLoader__.load({
       'surfbird_click', 'surfbird_double_click', 'surfbird_fill', 'surfbird_type',
       'surfbird_press_key', 'surfbird_scroll', 'surfbird_screenshot', 'surfbird_pdf',
       'surfbird_evaluate', 'surfbird_extract', 'surfbird_find', 'surfbird_console',
-      'surfbird_network', 'surfbird_cdp',
+      'surfbird_links', 'surfbird_webmcp', 'surfbird_network', 'surfbird_cdp',
     ]
     // 连接类错误 → 行内给设置入口
     // 只匹配真正需要去设置页处理的错误：缺配置 / 引擎连不上。
@@ -110,7 +110,8 @@ window.__ModuleLoader__.load({
       try {
         const params = [probe && 'probe=1', prompt && 'prompt=1'].filter(Boolean)
         const qs = params.length ? `?${params.join('&')}` : ''
-        const res = await fetch(STATUS_URL + qs, { cache: 'no-store' })
+        // 自定义头：跨站 simple-request 带不了它——服务端据此区分 UI 调用与 CSRF
+        const res = await fetch(STATUS_URL + qs, { cache: 'no-store', headers: { 'x-surfbird-ui': '1' } })
         if (!res.ok) return { reachable: false, error: `HTTP ${res.status}` }
         return await res.json()
       } catch (e) {

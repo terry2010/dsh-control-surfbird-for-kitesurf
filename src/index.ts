@@ -383,10 +383,16 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
           }
           // ?prompt=1（启动 toast 专用）：未配置/探测不可达且未用满 3 次额度 → prompt:true 并自增。
           // 额度在服务端记账——localStorage 在卸载后清不掉，无法兑现"卸载归零"。
+          // 要求 x-surfbird-ui 自定义头：GET 是跨站 simple request，裸 URL 会被任意网页
+          // 刷掉 3 次额度（结果读不走但消耗生效）；插件 UI 调用自带此头，跨域带不了。
           if (url.searchParams.get('prompt') === '1') {
-            const r = consumeSetupPrompt(body.configured === false || body.reachable === false)
-            body.prompt = r.prompt
-            body.promptShown = r.shown
+            if (request.headers.get('x-surfbird-ui') === '1') {
+              const r = consumeSetupPrompt(body.configured === false || body.reachable === false)
+              body.prompt = r.prompt
+              body.promptShown = r.shown
+            } else {
+              body.prompt = false
+            }
             body.promptMax = SETUP_PROMPT_MAX
           }
           return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
