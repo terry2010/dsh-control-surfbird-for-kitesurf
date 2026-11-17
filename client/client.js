@@ -6,7 +6,7 @@
  *    + advanced 折叠组；写 handle.set/mutate → host Config volatile 热生效。
  * 2. 设置页内状态横幅 + "测试连接"（GET /plugins/control-surfbird/status?probe=1）。
  * 3. shell.overlay 启动 toast：未配置/不可达时强提示 + 一键跳设置页
- *    （pluginNavigation.openBundle 包名，每会话一次）。
+ *    （pluginNavigation.openBundle 包名；累计至多 3 次，禁用/启用/卸载归零）。
  * 4. tool.call.toolview 键控行：surfbird_* 工具失败且属连接类错误时，
  *    行内给"打开设置"按钮。
  *
@@ -106,9 +106,11 @@ window.__ModuleLoader__.load({
       return r
     }
 
-    async function fetchStatus(probe) {
+    async function fetchStatus(probe, prompt) {
       try {
-        const res = await fetch(STATUS_URL + (probe ? '?probe=1' : ''), { cache: 'no-store' })
+        const params = [probe && 'probe=1', prompt && 'prompt=1'].filter(Boolean)
+        const qs = params.length ? `?${params.join('&')}` : ''
+        const res = await fetch(STATUS_URL + qs, { cache: 'no-store' })
         if (!res.ok) return { reachable: false, error: `HTTP ${res.status}` }
         return await res.json()
       } catch (e) {
@@ -373,7 +375,8 @@ window.__ModuleLoader__.load({
       }
     }
 
-    /** 启动 toast：sessionStorage 每会话一次；探测不可达才弹。React 由 apply 注入。 */
+    /** 启动 toast：累计至多 3 次（服务端记账，禁用/启用/卸载重装归零）；
+     *  sessionStorage 只防同会话 remount 重复消耗额度。React 由 apply 注入。 */
     function SetupToast(React, { t, onDone, onOpenSettings }) {
       const [show, setShow] = React.useState(false)
       React.useEffect(() => {
@@ -382,10 +385,9 @@ window.__ModuleLoader__.load({
           sessionStorage.setItem('sb-setup-toast', '1')
         } catch { /* sessionStorage 不可用仍检查一次 */ }
         // 必须 probe：非探测响应不含 reachable，"已配置但端点不可达"会漏提示。
-        // 服务端探活自带 3s 超时，且 sessionStorage 保证每会话至多一次。
-        fetchStatus(true).then((st) => {
-          // 未配置（无 endpoint 信息）或探测不可达 → 提示；status 字段缺失时保守不弹
-          if (st && (st.configured === false || st.reachable === false)) setShow(true)
+        // prompt=1 由服务端判定额度并自增；服务端探活自带 3s 超时。
+        fetchStatus(true, true).then((st) => {
+          if (st && st.prompt === true) setShow(true)
         })
       }, [])
       if (!show) return null

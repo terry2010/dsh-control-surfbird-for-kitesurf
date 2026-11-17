@@ -23,7 +23,7 @@ DSH（DeepSeek Harness）插件：让 AI agent 通过 Chrome DevTools Protocol�
 - **截图与 PDF**——视口、元素级（`target`+`padding`）、选区、整页截图（钳制到引擎上限 2560px 边长 / 2560×1440 像素），`Page.printToPDF` 支持纸张尺寸、页边距、方向和 CSS `@page`。截图以内联图片附件显示在对话里。
 - **Console 与网络检查**——按标签页的 console/network 缓冲，序号游标（`sinceIndex`）、错误过滤、会话感知的请求关联。
 - **裸 CDP 逃逸口**——`surfbird_cdp` 直发任意 CDP 方法，覆盖类型化工具没有的能力。
-- **设置 UI + 主动引导**——client half 提供配置卡（端点、凭据、超时、会话上限）热生效；未配置或不可达时每会话弹一次设置提示；连接类失败的工具行内带"打开设置"按钮；状态横幅显示实时连接状态和失败原因。
+- **设置 UI + 主动引导**——client half 提供配置卡（端点、凭据、超时、会话上限）热生效；未配置或不可达时弹设置提示（累计至多 3 次，禁用/启用/卸载重装后重新计）；连接类失败的工具行内带"打开设置"按钮；状态横幅显示实时连接状态和失败原因。
 - **机器绑定加密密钥文件**——`tokenFile` 支持明文或 `surfbird-v1:` AES-256-GCM 密文，密钥由本机 UUID（macOS `IOPlatformUUID` / Windows `MachineGuid` / Linux `machine-id`）派生，换机器无法解密，可安全提交/同步。附 `surfbird-token` CLI（`encrypt`/`decrypt`/`id`）和浏览器文件选择器一键导入加密。
 - **可移植共享核心**——`src/cdp/` 零 DSH 依赖（仅 `ws` + Node 内置模块），可整目录复制进 OpenCode 或 Pi 宿主。
 

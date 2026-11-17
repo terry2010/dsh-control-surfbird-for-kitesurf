@@ -14,10 +14,12 @@
  * @module dsh-control-surfbird-for-kitesurf
  */
 
-import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import type { Context } from '@deepseek-ai/cordis'
 import type { AttachmentStore } from '@deepseek-ai/dsh-attachment'
 import z from '@deepseek-ai/schemastery'
@@ -37,6 +39,13 @@ const DEFAULT_ENDPOINT = 'http://127.0.0.1:8080'
 const ENDPOINT_ENVS = ['SURFBIRD_URL', 'SURFBIRD_ENDPOINT', 'KITESURF_URL', 'KITESURF_ENDPOINT'] as const
 const TOKEN_ENVS = ['SURFBIRD_TOKEN', 'KITESURF_TOKEN'] as const
 const SETTINGS_NAMESPACE = 'control-surfbird'
+
+/** 启动 toast 累计上限：未配置/不可达时弹"需要配置"提示，全周期至多这么多次。 */
+const SETUP_PROMPT_MAX = 3
+const SETUP_PROMPT_FILE = join(homedir(), '.dsh', 'surfbird-setup-prompt.json')
+/** apply 在同一进程二次运行 = 插件被热重挂（禁用→启用），提示计数归零。
+ *  跨进程的重启用靠 setupEpoch 的 patch/package.json mtime 变化兜底。 */
+let applyRuns = 0
 
 export const Config = z.object({
   endpoint: z.string().default(DEFAULT_ENDPOINT).volatile()
@@ -134,6 +143,61 @@ export function resolveConfig(config: Record<string, unknown>): ResolvedConfig {
   }
 }
 
+/** 宿主 profile 目录：desktop/CLI 宿主把 profile 目录直接放 argv（实测 …/dsh-host … ~/.dsh/profiles/<name> …）。
+ *  link: 安装时模块路径解析到仓外真实路径，不能靠 import.meta 上溯，只能走 argv。 */
+function profileDirFromArgv(): string | undefined {
+  for (const arg of process.argv.slice(2)) {
+    try {
+      if (!arg.startsWith('/') || !statSync(arg).isDirectory()) continue
+      if (existsSync(join(arg, 'cordis.patch.yml')) || existsSync(join(arg, 'cordis.yml'))) return arg
+    } catch { /* 非目录参数 */ }
+  }
+  return undefined
+}
+
+/** 提示计数的时代指纹：profile cordis.patch.yml/package.json 的 mtime（市场/官方设置页禁用、启用、
+ *  装卸插件都会改写它们）+ 本包 package.json 路径与 mtime（重装、升级、link 换路径必变）。
+ *  任一变化视为新一轮生命周期，提示计数归零。 */
+function setupEpoch(): string {
+  const mt = (p: string): string => { try { return String(statSync(p).mtimeMs) } catch { return '-' } }
+  const h = createHash('sha1')
+  const pkg = fileURLToPath(new URL('../package.json', import.meta.url))
+  h.update(pkg).update(mt(pkg))
+  const prof = profileDirFromArgv()
+  if (prof) h.update(prof).update(mt(join(prof, 'cordis.patch.yml'))).update(mt(join(prof, 'package.json')))
+  return h.digest('hex').slice(0, 16)
+}
+
+interface SetupPromptState { epoch: string; shown: number }
+
+function readSetupPrompt(): SetupPromptState {
+  try {
+    const j = JSON.parse(readFileSync(SETUP_PROMPT_FILE, 'utf8')) as Partial<SetupPromptState>
+    if (typeof j.shown === 'number' && j.shown >= 0) {
+      return { epoch: typeof j.epoch === 'string' ? j.epoch : '', shown: j.shown }
+    }
+  } catch { /* 文件不存在/损坏 → 初始态 */ }
+  return { epoch: '', shown: 0 }
+}
+
+function writeSetupPrompt(st: SetupPromptState): void {
+  try {
+    mkdirSync(join(homedir(), '.dsh'), { recursive: true })
+    writeFileSync(SETUP_PROMPT_FILE, JSON.stringify(st))
+  } catch { /* 落盘失败 → 下轮重试 */ }
+}
+
+/** 消耗一次启动提示额度：epoch 变了先归零；确实需要提示（未配置/不可达）且未满 3 次才放行并自增。 */
+function consumeSetupPrompt(needed: boolean): { prompt: boolean; shown: number } {
+  const epoch = setupEpoch()
+  let st = readSetupPrompt()
+  if (st.epoch !== epoch) st = { epoch, shown: 0 }
+  const prompt = needed && st.shown < SETUP_PROMPT_MAX
+  if (prompt) st.shown += 1
+  writeSetupPrompt(st)
+  return { prompt, shown: st.shown }
+}
+
 /** ws(s)://…/devtools/browser → http(s)://host（探活 /json/version 用）。 */
 function httpBase(endpoint: string): string | undefined {
   try {
@@ -149,6 +213,10 @@ function httpBase(endpoint: string): string | undefined {
 }
 
 export function apply(ctx: Context, config: Record<string, unknown>): () => void {
+  // 同进程二次 apply = 热重挂（禁用→启用）→ 提示计数归零
+  applyRuns += 1
+  if (applyRuns > 1) writeSetupPrompt({ epoch: setupEpoch(), shown: 0 })
+
   // settings scope：让 client configForms 的写入实时生效（服务缺失时退化为 apply 入参）
   let currentSource: () => Record<string, unknown> = () => config
   try {
@@ -312,6 +380,14 @@ export function apply(ctx: Context, config: Record<string, unknown>): () => void
               body.reachable = false
               body.probeError = 'endpoint is not a valid URL'
             }
+          }
+          // ?prompt=1（启动 toast 专用）：未配置/探测不可达且未用满 3 次额度 → prompt:true 并自增。
+          // 额度在服务端记账——localStorage 在卸载后清不掉，无法兑现"卸载归零"。
+          if (url.searchParams.get('prompt') === '1') {
+            const r = consumeSetupPrompt(body.configured === false || body.reachable === false)
+            body.prompt = r.prompt
+            body.promptShown = r.shown
+            body.promptMax = SETUP_PROMPT_MAX
           }
           return new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } })
         },
