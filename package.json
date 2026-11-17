@@ -1,6 +1,6 @@
 {
   "name": "dsh-control-surfbird-for-kitesurf",
-  "version": "0.5.1",
+  "version": "0.6.0",
   "description": "Control a Kitesurf browser engine over CDP from DSH via surfbird. Works with surfbird raw/auth deployments and upstream kitesurf.",
   "type": "module",
   "main": "lib/index.js",

@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-17
+
+### Added
+
+- Setup-toast budget: the "browser plugin needs configuration" startup toast
+  now shows at most 3 cumulative times, tracked server-side in
+  `~/.dsh/surfbird-setup-prompt.json`. The counter resets when the plugin is
+  disabled/re-enabled, reinstalled, or hot-remounted in the same process
+  (epoch fingerprint of the profile patch files + own package.json).
+- `GET /plugins/control-surfbird/status?prompt=1` consumes one budget slot
+  only when the engine is unconfigured/unreachable, and only for requests
+  carrying the `x-surfbird-ui` header — a cross-site GET could otherwise
+  drain the budget.
+
+### Fixed
+
+- The "打开设置" button on failed toolview rows was permanently dead —
+  `pluginNavigation` was captured by value before the host provided it;
+  the button now resolves it lazily on click and shows the error code.
+- Models retried `unreachable` errors in a loop (wasted tokens): the error
+  is now `retryable:false`, and `not_configured`/`unreachable` failures
+  attach a hint pointing the user at 设置 → 插件 → control-surfbird.
+- `surfbird_extract` always crashed — a bare `require('turndown')` was a
+  ReferenceError under ESM; now resolved via `createRequire`.
+- Config hot-updates now take effect on an existing session's next
+  (re)connect instead of pinning the endpoint/token captured at creation.
+- `surfbird_links`/`surfbird_webmcp` failure rows now offer the settings
+  shortcut like the other tools.
+- `surfbird_network` reported `total: 0` when read with `clear`; the
+  console `dropped` counter now reports real numbers instead of always 0.
+
+### Security
+
+- `surfbird_navigate`/`surfbird_new_tab` accept only `http`/`https`/`about`
+  URLs — `data:` was dropped (arbitrary text rendered as a page is a
+  prompt-injection surface), and `surfbird_new_tab` previously applied no
+  scheme check at all.
+
 ## [0.5.1] - 2026-11-15
 
 ### Fixed
