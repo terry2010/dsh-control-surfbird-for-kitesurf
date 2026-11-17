@@ -103,8 +103,14 @@ function ok(data: JsonValue): JsonValue {
   return { ok: true, data: clean as JsonValue }
 }
 
+/** 连接类错误的模型指引：引擎没起来时立刻重试只是烧 token，必须先把人引去配置。 */
+const CONN_HINT = 'engine unreachable — do NOT retry surfbird_* calls in a loop. Tell the user to start the Kitesurf engine or fix endpoint/token in DSH 设置 → 插件 → control-surfbird, then re-check with surfbird_status.'
+
 function fail(e: unknown): JsonValue {
   if (e instanceof SurfbirdError) {
+    if (e.code === 'unreachable' || e.code === 'not_configured') {
+      return { ok: false, error: { code: e.code, message: e.message, retryable: false, hint: CONN_HINT } }
+    }
     return { ok: false, error: { code: e.code, message: e.message, retryable: e.retryable } }
   }
   if (isBrowserResetError(e)) {

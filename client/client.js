@@ -410,8 +410,10 @@ window.__ModuleLoader__.load({
 
     /** tool.call.toolview 行：连接类失败 → 行内"打开设置"；
      *  结果含 image block（surfbird_screenshot）→ loadImage 取 URL 渲染缩略图。
-     *  注意：tool.call.images 子槽位被 read_image 独占不能声明，只能直接 <img>。 */
-    function makeToolRow(React, nav, t) {
+     *  注意：tool.call.images 子槽位被 read_image 独占不能声明，只能直接 <img>。
+     *  openSettings 必须是闭包而非 nav 值——本组件创建时 pluginNavigation 多半还没
+     *  provide，按值捕获会让按钮永远拿到 undefined（实测点击无反应）。 */
+    function makeToolRow(React, openSettings, t) {
       const el = React.createElement
       // 单张工具结果图片：loadImage 是 chat 注入的 Gateway 授权 loader，
       // 返回可直接放 <img> 的 URL；peek 有同步缓存就先用，避免闪烁。
@@ -458,11 +460,11 @@ window.__ModuleLoader__.load({
           el('span', null, name),
           connFail
             ? el('button', {
-                onClick: () => { try { nav?.openBundle?.(ID) } catch { /* */ } },
+                onClick: () => { try { openSettings?.() } catch { /* */ } },
                 style: { fontSize: 11, padding: '1px 8px', borderRadius: 8, cursor: 'pointer',
                   border: '1px solid #cf222e', color: '#cf222e', background: 'transparent' },
                 title: code,
-              }, `⚠ ${t('row.fail')} · ${t('openSettings')}`)
+              }, `⚠ ${t('row.fail')} · ${code} · ${t('openSettings')}`)
             : null)
         // settled 结果里的 image blocks（目前只有 surfbird_screenshot 产出）
         const images = []
@@ -661,7 +663,7 @@ window.__ModuleLoader__.load({
       // 25 个 key 会全部静默失败（每个都在 try/catch 里）。
       try {
         ctx.inject(['slots'], (inner) => {
-          const Row = makeToolRow(React, nav, t0)
+          const Row = makeToolRow(React, openSettings, t0)
           inner.effect(() => inner.slots.inject('tool.call.toolview', () => {
             const disposers = []
             for (const name of TOOL_NAMES) {

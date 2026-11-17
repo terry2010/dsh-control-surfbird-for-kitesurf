@@ -94,7 +94,8 @@ export class SessionBrowser {
     } catch (e) {
       b.disconnect()
       const msg = e instanceof Error ? e.message : String(e)
-      throw new SurfbirdError('unreachable', `cannot reach Kitesurf endpoint ${this.opts.endpoint}: ${msg}`, { retryable: true })
+      // retryable:false——连不上的引擎立即重试没意义；标 true 会让模型空转重试烧 token
+      throw new SurfbirdError('unreachable', `cannot reach Kitesurf endpoint ${this.opts.endpoint}: ${msg}`, { retryable: false })
     }
     this.browser = b
     this.wire(b)
