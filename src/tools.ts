@@ -146,6 +146,17 @@ function sessionKey(exec: ToolRunContext): string {
   return typeof id === 'string' && id ? id : '__global__'
 }
 
+/** 导航 URL 白名单：http/https/about。data:/javascript:/file: 一律拒绝——
+ *  data: 会把任意文本渲染成页面内容（可被 prompt-injection 当成"打开这个链接"投毒），
+ *  javascript:/file: 更不能放。navigate 与 new_tab 共用同一校验，别在一处漏掉。 */
+function assertNavUrl(url: string): void {
+  let protocol = ''
+  try { protocol = new URL(url).protocol } catch { /* 相对 URL 交给引擎判定 */ }
+  if (protocol && !['http:', 'https:', 'about:'].includes(protocol)) {
+    throw new SurfbirdError('cdp_error', `unsupported URL scheme: ${protocol} (allowed: http/https/about)`)
+  }
+}
+
 function numArg(v: JsonValue | undefined): number | undefined {
   return typeof v === 'number' ? v : undefined
 }
@@ -220,6 +231,7 @@ const TOOLS: ToolDef[] = [
     },
     run: async (sess, args, exec) => {
       const url = strArg(args.url)
+      if (url) assertNavUrl(url)
       const tab = await sess.newTab(url)
       const wait = strArg(args.wait) ?? (url ? 'load' : 'none')
       if (url && wait !== 'none') {
@@ -261,11 +273,7 @@ const TOOLS: ToolDef[] = [
     },
     run: async (sess, args, exec) => {
       const url = String(args.url)
-      let protocol = ''
-      try { protocol = new URL(url).protocol } catch { /* relative/about: 交给引擎 */ }
-      if (protocol && !['http:', 'https:', 'about:', 'data:'].includes(protocol)) {
-        throw new SurfbirdError('cdp_error', `unsupported URL scheme: ${protocol} (allowed: http/https/about/data)`)
-      }
+      assertNavUrl(url)
       const res = await sess.navigate(url, strArg(args.tabId))
       const wait = strArg(args.wait) ?? 'load'
       if (wait !== 'none') {
